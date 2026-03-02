@@ -98,7 +98,7 @@ export function Sidebar() {
   };
 
   const starredChannels = channels.filter((ch) => ch.isStarred && ch.isMember);
-  const publicChannels = channels.filter((ch) => !ch.isPrivate);
+  const publicChannels = channels.filter((ch) => !ch.isPrivate && ch.isMember);
   const privateChannels = channels.filter((ch) => ch.isPrivate);
 
   return (

@@ -84,7 +84,7 @@ test.describe('Bug #3: Channel browser to join existing channels', () => {
 
     // Channel should now appear in sidebar
     await expect(
-      page2.locator('button').filter({ hasText: channelName })
+      page2.getByTestId('sidebar').locator('button').filter({ has: page2.locator('span.truncate', { hasText: channelName }) }).first()
     ).toBeVisible({ timeout: 5_000 });
 
     await ctx1.close();
@@ -454,12 +454,11 @@ test.describe('Bug #4: Leave channel UI', () => {
     await browseItem.getByRole('button', { name: /join/i }).click();
 
     // Channel should appear in sidebar
-    await expect(
-      page2.locator('button').filter({ hasText: channelName })
-    ).toBeVisible({ timeout: 5_000 });
+    const sidebarChannelBtn = page2.getByTestId('sidebar').locator('button').filter({ has: page2.locator('span.truncate', { hasText: channelName }) }).first();
+    await expect(sidebarChannelBtn).toBeVisible({ timeout: 5_000 });
 
     // Click the channel to make it active
-    await page2.locator('button').filter({ hasText: channelName }).click();
+    await sidebarChannelBtn.click();
     await expect(page2.locator('.ql-editor')).toBeVisible();
 
     // Open the channel header menu (⋮ button)
@@ -474,7 +473,7 @@ test.describe('Bug #4: Leave channel UI', () => {
     // Channel should no longer appear in the sidebar
     const sidebar = page2.locator('[data-testid="sidebar"]');
     await expect(
-      sidebar.locator('button').filter({ hasText: channelName })
+      sidebar.locator('button').filter({ has: page2.locator('span.truncate', { hasText: channelName }) }).first()
     ).not.toBeVisible({ timeout: 5_000 });
 
     await ctx2.close();
