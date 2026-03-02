@@ -111,6 +111,7 @@ export function ThreadPanel({ messageId, onClose, onReplyCountChange }: ThreadPa
               <div className="mb-4 pb-3 border-b border-[#E0E0E0]">
                 <div className="flex items-start gap-2">
                   <Avatar
+                    src={parentMessage.user.avatar ?? undefined}
                     alt={parentMessage.user.name}
                     fallback={parentMessage.user.name}
                     size="md"
@@ -143,6 +144,7 @@ export function ThreadPanel({ messageId, onClose, onReplyCountChange }: ThreadPa
               <div key={reply.id} className="mb-3">
                 <div className="flex items-start gap-2">
                   <Avatar
+                    src={reply.user.avatar ?? undefined}
                     alt={reply.user.name}
                     fallback={reply.user.name}
                     size="sm"

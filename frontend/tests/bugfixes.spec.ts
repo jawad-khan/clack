@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, register, uniqueEmail, sendMessage, waitForMessage } from './helpers';
+import { login, register, uniqueEmail, sendMessage, waitForMessage, clickChannel, expectChannelInSidebar } from './helpers';
 
 test.describe('Bug #1: No console errors for non-member channels', () => {
   test('page loads without "must be a member" errors', async ({ page }) => {
@@ -16,7 +16,7 @@ test.describe('Bug #1: No console errors for non-member channels', () => {
 
     // Reload the page to trigger channel fetching
     await page.reload();
-    await expect(page.getByRole('button', { name: 'Channels', exact: true })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('sidebar')).toBeVisible({ timeout: 10_000 });
 
     // Wait a moment for any async errors to fire
     await page.waitForTimeout(2_000);
@@ -33,11 +33,11 @@ test.describe('Bug #2: New users auto-joined to default channels', () => {
     await register(page, 'Bug2 User', email, 'password123');
 
     // User should see #general and #random in the sidebar (use first() to avoid ambiguity with header)
-    await expect(page.locator('button').filter({ hasText: 'general' }).first()).toBeVisible({ timeout: 5_000 });
-    await expect(page.locator('button').filter({ hasText: 'random' }).first()).toBeVisible({ timeout: 5_000 });
+    await expectChannelInSidebar(page, 'general');
+    await expectChannelInSidebar(page, 'random');
 
     // User should be able to send a message (proving they're a member)
-    await page.locator('button').filter({ hasText: 'general' }).first().click();
+    await clickChannel(page, 'general');
     await expect(page.locator('.ql-editor')).toBeVisible();
     const testMsg = `Auto-join test ${Date.now()}`;
     await sendMessage(page, testMsg);
@@ -98,8 +98,8 @@ test.describe('Bug #4: Search functionality', () => {
     await register(page, 'Search User', email, 'password123');
 
     // Wait for general channel to appear and click it
-    await expect(page.locator('button').filter({ hasText: 'general' })).toBeVisible({ timeout: 10_000 });
-    await page.locator('button').filter({ hasText: 'general' }).click();
+    await expectChannelInSidebar(page, 'general');
+    await clickChannel(page, 'general');
     await expect(page.locator('.ql-editor')).toBeVisible();
 
     // Add random suffix to avoid collision between parallel test workers
@@ -179,7 +179,7 @@ test.describe('Bug #9: Registration error display', () => {
 
 test.describe('Bug #10: Create channel validation', () => {
   test('shows validation error for empty channel name', async ({ page }) => {
-    await login(page);
+    await register(page, 'ChanVal User', uniqueEmail(), 'password123');
     await page.locator('button').filter({ hasText: 'Add channels' }).click();
 
     // Create button should be disabled when name is empty
@@ -237,7 +237,7 @@ test.describe('Bug #3: No TypeError from fetchDirectMessages with null entries',
     });
 
     await register(page, 'DmNull User', email, 'password123');
-    await expect(page.locator('button').filter({ hasText: 'general' })).toBeVisible({ timeout: 10_000 });
+    await expectChannelInSidebar(page, 'general');
     await page.waitForTimeout(1_000);
 
     const typeErrors = consoleErrors.filter((e) => e.includes('Failed to fetch DMs'));
@@ -251,8 +251,8 @@ test.describe('Bug #12: Channel star/favorite', () => {
     await register(page, 'Star User', email, 'password123');
 
     // Open general channel
-    await expect(page.locator('button').filter({ hasText: 'general' })).toBeVisible({ timeout: 10_000 });
-    await page.locator('button').filter({ hasText: 'general' }).click();
+    await expectChannelInSidebar(page, 'general');
+    await clickChannel(page, 'general');
     await expect(page.locator('.ql-editor')).toBeVisible();
 
     // Click the star button in the channel header
@@ -264,15 +264,15 @@ test.describe('Bug #12: Channel star/favorite', () => {
     // The general channel should appear under the Starred section
     const starredSection = page.locator('[data-testid="starred-section"]');
     await expect(starredSection).toBeVisible();
-    await expect(starredSection.locator('button').filter({ hasText: 'general' })).toBeVisible();
+    await expect(starredSection.locator('button').filter({ has: page.locator('span.truncate', { hasText: 'general' }) })).toBeVisible();
   });
 
   test('un-starring a channel removes it from the Starred section', async ({ page }) => {
     const email = uniqueEmail();
     await register(page, 'Unstar User', email, 'password123');
 
-    await expect(page.locator('button').filter({ hasText: 'general' })).toBeVisible({ timeout: 10_000 });
-    await page.locator('button').filter({ hasText: 'general' }).click();
+    await expectChannelInSidebar(page, 'general');
+    await clickChannel(page, 'general');
     await expect(page.locator('.ql-editor')).toBeVisible();
 
     // Star it
@@ -292,7 +292,7 @@ test.describe('Bug #11: Reaction emoji size inside pill', () => {
     const email = uniqueEmail();
     await register(page, 'EmojiSize User', email, 'password123');
 
-    await page.locator('button').filter({ hasText: 'general' }).first().click();
+    await clickChannel(page, 'general');
     await expect(page.locator('.ql-editor')).toBeVisible({ timeout: 10_000 });
     await page.waitForTimeout(500);
 
@@ -327,8 +327,8 @@ test.describe('Bug #10: No video icon in message composer', () => {
     const email = uniqueEmail();
     await register(page, 'NoVideo User', email, 'password123');
 
-    await expect(page.locator('button').filter({ hasText: 'general' })).toBeVisible({ timeout: 10_000 });
-    await page.locator('button').filter({ hasText: 'general' }).click();
+    await expectChannelInSidebar(page, 'general');
+    await clickChannel(page, 'general');
     await expect(page.locator('.ql-editor')).toBeVisible();
 
     // The video button should NOT exist in the composer bottom toolbar
@@ -342,8 +342,8 @@ test.describe('Bug #1: Pinned message does not show (edited) label', () => {
     const email = uniqueEmail();
     await register(page, 'PinEdit User', email, 'password123');
 
-    await expect(page.locator('button').filter({ hasText: 'general' })).toBeVisible({ timeout: 10_000 });
-    await page.locator('button').filter({ hasText: 'general' }).click();
+    await expectChannelInSidebar(page, 'general');
+    await clickChannel(page, 'general');
     await expect(page.locator('.ql-editor')).toBeVisible();
 
     const msg = `pin-edited-${Date.now()}`;
@@ -371,8 +371,8 @@ test.describe('Bug #9: Pinned message has orange background', () => {
     const email = uniqueEmail();
     await register(page, 'PinBg User', email, 'password123');
 
-    await expect(page.locator('button').filter({ hasText: 'general' })).toBeVisible({ timeout: 10_000 });
-    await page.locator('button').filter({ hasText: 'general' }).click();
+    await expectChannelInSidebar(page, 'general');
+    await clickChannel(page, 'general');
     await expect(page.locator('.ql-editor')).toBeVisible();
 
     const msg = `pin-bg-${Date.now()}`;
@@ -400,8 +400,8 @@ test.describe('Bug #12: Bookmark button', () => {
     await register(page, 'Bookmark User', email, 'password123');
 
     // Wait for general channel and click it
-    await expect(page.locator('button').filter({ hasText: 'general' })).toBeVisible({ timeout: 10_000 });
-    await page.locator('button').filter({ hasText: 'general' }).click();
+    await expectChannelInSidebar(page, 'general');
+    await clickChannel(page, 'general');
     await expect(page.locator('.ql-editor')).toBeVisible();
     const msg = `Bookmark test ${Date.now()}`;
     await sendMessage(page, msg);

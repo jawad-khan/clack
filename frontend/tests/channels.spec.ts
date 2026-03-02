@@ -1,17 +1,17 @@
 import { test, expect } from '@playwright/test';
-import { login, sendMessage, waitForMessage, uniqueEmail, register } from './helpers';
+import { login, sendMessage, waitForMessage, uniqueEmail, register, clickChannel } from './helpers';
 
 test.describe('Channels', () => {
   test.beforeEach(async ({ page }) => {
     // Register a fresh user who will be auto-joined to #general and #random
     const email = uniqueEmail();
     await register(page, 'Channel Tester', email, 'password123');
-    await expect(page.getByRole('button', { name: 'Channels', exact: true })).toBeVisible();
+    await expect(page.getByTestId('sidebar')).toBeVisible();
   });
 
   test('user can switch between channels', async ({ page }) => {
-    // Click on #general channel (first match = sidebar)
-    await page.locator('button').filter({ hasText: 'general' }).first().click();
+    // Click on #general channel
+    await clickChannel(page, 'general');
     // The message input placeholder should reference general
     await expect(page.locator('.ql-editor')).toHaveAttribute(
       'data-placeholder',
@@ -19,7 +19,7 @@ test.describe('Channels', () => {
     );
 
     // Click on #random channel
-    await page.locator('button').filter({ hasText: 'random' }).first().click();
+    await clickChannel(page, 'random');
     // The message input placeholder should reference random
     await expect(page.locator('.ql-editor')).toHaveAttribute(
       'data-placeholder',
@@ -29,14 +29,14 @@ test.describe('Channels', () => {
 
   test('messages are different in each channel', async ({ page }) => {
     // Send a message in #general
-    await page.locator('button').filter({ hasText: 'general' }).first().click();
+    await clickChannel(page, 'general');
     await expect(page.locator('.ql-editor')).toBeVisible();
     const generalMsg = `General msg ${Date.now()}`;
     await sendMessage(page, generalMsg);
     await waitForMessage(page, generalMsg);
 
     // Switch to #random
-    await page.locator('button').filter({ hasText: 'random' }).first().click();
+    await clickChannel(page, 'random');
     await expect(page.locator('.ql-editor')).toBeVisible();
 
     // The general message should NOT be visible in #random
@@ -50,7 +50,7 @@ test.describe('Channels', () => {
     await waitForMessage(page, randomMsg);
 
     // Switch back to #general — random message should not be there
-    await page.locator('button').filter({ hasText: 'general' }).first().click();
+    await clickChannel(page, 'general');
     await expect(
       page.locator('.group.relative.flex.px-5').filter({ hasText: randomMsg })
     ).not.toBeVisible({ timeout: 3_000 });
@@ -122,24 +122,24 @@ test.describe('Channels', () => {
 
     // Wait for app to load
     for (const page of [page1, page2]) {
-      await expect(page.getByRole('button', { name: 'Channels', exact: true })).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByTestId('sidebar')).toBeVisible({ timeout: 10_000 });
     }
 
     // User 2 switches to #random so #general becomes inactive
-    await page2.locator('button').filter({ hasText: 'random' }).first().click();
+    await clickChannel(page2, 'random');
     await expect(page2.locator('.ql-editor')).toBeVisible();
 
     // Give socket connections time to establish
     await page1.waitForTimeout(1_000);
 
     // User 1 sends a message in #general
-    await page1.locator('button').filter({ hasText: 'general' }).first().click();
+    await clickChannel(page1, 'general');
     await expect(page1.locator('.ql-editor')).toBeVisible();
     const unreadMsg = `Unread test ${Date.now()}`;
     await sendMessage(page1, unreadMsg);
 
     // User 2 should see an unread badge on the #general channel in sidebar
-    const generalButton = page2.locator('button').filter({ hasText: 'general' }).first();
+    const generalButton = page2.getByTestId('sidebar').locator('button').filter({ has: page2.locator('span.truncate', { hasText: 'general' }) }).first();
     await expect(generalButton.locator('span').filter({ hasText: /^\d+$/ })).toBeVisible({
       timeout: 10_000,
     });

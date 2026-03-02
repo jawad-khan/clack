@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { register, uniqueEmail } from './helpers';
+import { register, uniqueEmail, clickChannel } from './helpers';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -35,7 +35,7 @@ test.describe('File Uploads', () => {
     const email = uniqueEmail();
     await register(page, 'FileUser', email, 'password123');
 
-    await page.getByText('general').click();
+    await clickChannel(page, 'general');
     await page.waitForTimeout(500);
 
     const attachButton = page.getByTestId('attach-file-button');

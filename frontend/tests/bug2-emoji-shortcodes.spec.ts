@@ -1,12 +1,12 @@
 import { test, expect } from '@playwright/test';
-import { register, sendMessage, waitForMessage, uniqueEmail } from './helpers';
+import { register, sendMessage, waitForMessage, uniqueEmail, clickChannel } from './helpers';
 
 test.describe('Bug #2: Emoji shortcodes render as unicode', () => {
   test('reaction stored as shortcode +1 renders as 👍 emoji', async ({ page }) => {
     const email = uniqueEmail();
     await register(page, 'EmojiCode User', email, 'password123');
 
-    await page.locator('button').filter({ hasText: 'general' }).first().click();
+    await clickChannel(page, 'general');
     await expect(page.locator('.ql-editor')).toBeVisible({ timeout: 10_000 });
     // Wait for channel to fully load (socket join + message list render)
     await page.waitForTimeout(1000);
@@ -67,7 +67,7 @@ test.describe('Bug #2: Emoji shortcodes render as unicode', () => {
 
     // Reload to fetch fresh data
     await page.reload();
-    await page.locator('button').filter({ hasText: 'general' }).first().click();
+    await clickChannel(page, 'general');
     await expect(page.locator('.ql-editor')).toBeVisible({ timeout: 10_000 });
     await waitForMessage(page, msg);
 

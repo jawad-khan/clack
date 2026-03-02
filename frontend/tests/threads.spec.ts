@@ -6,8 +6,8 @@ test.describe('Threads', () => {
     const email = uniqueEmail();
     await register(page, 'ThreadUser', email, 'password123');
 
-    // Click general channel
-    await page.getByText('general').click();
+    // Click general channel (scope to sidebar to avoid matching channel header)
+    await page.getByTestId('sidebar').locator('button').filter({ has: page.locator('span.truncate', { hasText: 'general' }) }).first().click();
     await page.waitForTimeout(500);
 
     // Send a unique message
@@ -48,7 +48,7 @@ test.describe('Threads', () => {
     const email = uniqueEmail();
     await register(page, 'MultiReply', email, 'password123');
 
-    await page.getByText('general').click();
+    await page.getByTestId('sidebar').locator('button').filter({ has: page.locator('span.truncate', { hasText: 'general' }) }).first().click();
     await page.waitForTimeout(500);
 
     // Send unique parent message

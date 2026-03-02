@@ -7,17 +7,17 @@ test.describe('Authentication', () => {
     await register(page, 'New Tester', email, 'securepass123');
 
     // Should be on the main app with sidebar visible
-    await expect(page.getByRole('button', { name: 'Channels', exact: true })).toBeVisible();
+    await expect(page.getByTestId('sidebar')).toBeVisible();
     // Should see channel list (general should exist by default)
-    await expect(page.locator('button').filter({ hasText: 'general' })).toBeVisible();
+    await expect(page.getByTestId('sidebar').locator('button').filter({ has: page.locator('span.truncate', { hasText: 'general' }) }).first()).toBeVisible();
   });
 
   test('user can login with email and password', async ({ page }) => {
-    await login(page);
+    await login(page, 'alice@slawk.dev', 'password123');
 
     // Should be on the main app with the sidebar visible
-    await expect(page.getByRole('button', { name: 'Channels', exact: true })).toBeVisible();
-    await expect(page.locator('button').filter({ hasText: 'general' })).toBeVisible();
+    await expect(page.getByTestId('sidebar')).toBeVisible();
+    await expect(page.getByTestId('sidebar').locator('button').filter({ has: page.locator('span.truncate', { hasText: 'general' }) }).first()).toBeVisible();
   });
 
   test('login fails with wrong password', async ({ page }) => {
@@ -31,7 +31,7 @@ test.describe('Authentication', () => {
 
     // Should show an error indication — either an alert, toast, or inline error
     // The login page should NOT transition to the channels view
-    await expect(page.getByRole('button', { name: 'Channels', exact: true })).not.toBeVisible({ timeout: 3_000 });
+    await expect(page.getByTestId('sidebar')).not.toBeVisible({ timeout: 3_000 });
   });
 
   test('after successful login, user sees channels page', async ({ page }) => {
@@ -43,10 +43,10 @@ test.describe('Authentication', () => {
     await expect(page.locator('text=Slawk')).toBeVisible();
 
     // Sidebar channel list should be visible
-    await expect(page.getByRole('button', { name: 'Channels', exact: true })).toBeVisible();
+    await expect(page.getByTestId('sidebar')).toBeVisible();
 
     // At least the #general channel should be present
-    await expect(page.locator('button').filter({ hasText: 'general' }).first()).toBeVisible();
+    await expect(page.getByTestId('sidebar').locator('button').filter({ has: page.locator('span.truncate', { hasText: 'general' }) }).first()).toBeVisible();
 
     // The message input area should be visible for the active channel
     await expect(page.locator('.ql-editor')).toBeVisible({ timeout: 10_000 });

@@ -3,7 +3,7 @@
  * Acts as manual QA testing via automation.
  */
 import { test, expect } from '@playwright/test';
-import { register, uniqueEmail, sendMessage, waitForMessage } from './helpers';
+import { register, uniqueEmail, sendMessage, waitForMessage, clickChannel, expectChannelInSidebar } from './helpers';
 
 test.describe('QA: Comprehensive Feature Verification', () => {
   test('Feature #1: User authentication - register, login, logout', async ({ page }) => {
@@ -13,7 +13,7 @@ test.describe('QA: Comprehensive Feature Verification', () => {
 
     // Register
     await register(page, name, email, password);
-    await expect(page.locator('button').filter({ hasText: 'general' }).first()).toBeVisible({ timeout: 5000 });
+    await expectChannelInSidebar(page, 'general');
 
     // Logout
     await page.getByTestId('user-menu-button').click();
@@ -24,7 +24,7 @@ test.describe('QA: Comprehensive Feature Verification', () => {
     await page.getByPlaceholder('name@work-email.com').fill(email);
     await page.getByPlaceholder('Password').fill(password);
     await page.getByRole('button', { name: /sign in with email/i }).click();
-    await expect(page.locator('button').filter({ hasText: 'general' }).first()).toBeVisible({ timeout: 5000 });
+    await expectChannelInSidebar(page, 'general');
   });
 
   test('Feature #2: Channels - create, join, browse', async ({ browser }) => {
@@ -55,7 +55,7 @@ test.describe('QA: Comprehensive Feature Verification', () => {
 
   test('Feature #3: Real-time messaging', async ({ page }) => {
     await register(page, 'MsgUser', uniqueEmail(), 'password123');
-    await page.locator('button').filter({ hasText: 'general' }).click();
+    await clickChannel(page, 'general');
     await expect(page.locator('.ql-editor')).toBeVisible({ timeout: 5000 });
 
     const msg = `QA msg ${Date.now()}`;
@@ -66,7 +66,7 @@ test.describe('QA: Comprehensive Feature Verification', () => {
   test('Feature #4: Message history - messages persist', async ({ page }) => {
     const email = uniqueEmail();
     await register(page, 'HistoryUser', email, 'password123');
-    await page.locator('button').filter({ hasText: 'general' }).click();
+    await clickChannel(page, 'general');
     await expect(page.locator('.ql-editor')).toBeVisible({ timeout: 5000 });
 
     const msg = `History ${Date.now()}`;
@@ -75,7 +75,7 @@ test.describe('QA: Comprehensive Feature Verification', () => {
 
     // Reload and verify message persists
     await page.reload();
-    await page.locator('button').filter({ hasText: 'general' }).click();
+    await clickChannel(page, 'general');
     await expect(page.getByText(msg)).toBeVisible({ timeout: 10000 });
   });
 
@@ -90,7 +90,7 @@ test.describe('QA: Comprehensive Feature Verification', () => {
 
   test('Feature #6: File uploads', async ({ page }) => {
     await register(page, 'FileUser', uniqueEmail(), 'password123');
-    await page.locator('button').filter({ hasText: 'general' }).click();
+    await clickChannel(page, 'general');
     await expect(page.locator('.ql-editor')).toBeVisible({ timeout: 5000 });
 
     // Upload a file
@@ -106,7 +106,7 @@ test.describe('QA: Comprehensive Feature Verification', () => {
 
   test('Feature #7: Threads', async ({ page }) => {
     await register(page, 'ThreadUser', uniqueEmail(), 'password123');
-    await page.locator('button').filter({ hasText: 'general' }).click();
+    await clickChannel(page, 'general');
     await expect(page.locator('.ql-editor')).toBeVisible({ timeout: 5000 });
 
     const parentMsg = `Thread parent ${Date.now()}`;
@@ -126,7 +126,7 @@ test.describe('QA: Comprehensive Feature Verification', () => {
 
   test('Feature #8: Search', async ({ page }) => {
     await register(page, 'SearchUser', uniqueEmail(), 'password123');
-    await page.locator('button').filter({ hasText: 'general' }).click();
+    await clickChannel(page, 'general');
     await expect(page.locator('.ql-editor')).toBeVisible({ timeout: 5000 });
 
     const searchTerm = `searchable ${Date.now()}`;
@@ -147,13 +147,13 @@ test.describe('QA: Comprehensive Feature Verification', () => {
     const name1 = `DM1_${ts}`;
     await register(page1, name1, uniqueEmail(), 'password123');
     // Wait for app to load
-    await expect(page1.locator('button').filter({ hasText: 'general' }).first()).toBeVisible({ timeout: 5000 });
+    await expectChannelInSidebar(page1, 'general');
 
     const ctx2 = await browser.newContext();
     const page2 = await ctx2.newPage();
     const name2 = `DM2_${ts}`;
     await register(page2, name2, uniqueEmail(), 'password123');
-    await expect(page2.locator('button').filter({ hasText: 'general' }).first()).toBeVisible({ timeout: 5000 });
+    await expectChannelInSidebar(page2, 'general');
 
     // User1 starts a DM with User2
     await page1.locator('button').filter({ hasText: 'Add teammates' }).click();
@@ -170,7 +170,7 @@ test.describe('QA: Comprehensive Feature Verification', () => {
 
   test('Feature #10: Reactions', async ({ page }) => {
     await register(page, 'ReactionUser', uniqueEmail(), 'password123');
-    await page.locator('button').filter({ hasText: 'general' }).click();
+    await clickChannel(page, 'general');
     await expect(page.locator('.ql-editor')).toBeVisible({ timeout: 5000 });
 
     const msg = `React to me ${Date.now()}`;
@@ -189,7 +189,7 @@ test.describe('QA: Comprehensive Feature Verification', () => {
 
   test('Feature #11: Message editing', async ({ page }) => {
     await register(page, 'EditUser', uniqueEmail(), 'password123');
-    await page.locator('button').filter({ hasText: 'general' }).click();
+    await clickChannel(page, 'general');
     await expect(page.locator('.ql-editor')).toBeVisible({ timeout: 5000 });
 
     const original = `Edit me ${Date.now()}`;
@@ -212,7 +212,7 @@ test.describe('QA: Comprehensive Feature Verification', () => {
 
   test('Feature #12: @mentions', async ({ page }) => {
     await register(page, 'MentionUser', uniqueEmail(), 'password123');
-    await page.locator('button').filter({ hasText: 'general' }).click();
+    await clickChannel(page, 'general');
     await expect(page.locator('.ql-editor')).toBeVisible({ timeout: 5000 });
 
     // Click @ button
@@ -223,7 +223,7 @@ test.describe('QA: Comprehensive Feature Verification', () => {
 
   test('Feature #13: Pinned messages', async ({ page }) => {
     await register(page, 'PinUser', uniqueEmail(), 'password123');
-    await page.locator('button').filter({ hasText: 'general' }).click();
+    await clickChannel(page, 'general');
     await expect(page.locator('.ql-editor')).toBeVisible({ timeout: 5000 });
 
     const msg = `Pin me ${Date.now()}`;
@@ -243,7 +243,7 @@ test.describe('QA: Comprehensive Feature Verification', () => {
   test('Feature #14: User profiles', async ({ page }) => {
     const name = `ProfileQA_${Date.now()}`;
     await register(page, name, uniqueEmail(), 'password123');
-    await page.locator('button').filter({ hasText: 'general' }).click();
+    await clickChannel(page, 'general');
     await expect(page.locator('.ql-editor')).toBeVisible({ timeout: 5000 });
 
     // Open own profile

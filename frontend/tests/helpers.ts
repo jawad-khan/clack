@@ -22,7 +22,7 @@ export async function login(
   await page.getByRole('button', { name: /sign in with email/i }).click();
 
   // Wait for the main app layout to appear (sidebar with channels)
-  await expect(page.getByRole('button', { name: 'Channels', exact: true })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByTestId('sidebar')).toBeVisible({ timeout: 10_000 });
 }
 
 /**
@@ -42,7 +42,7 @@ export async function register(
   await page.getByRole('button', { name: /create account/i }).click();
 
   // Wait for the main app layout to appear
-  await expect(page.getByRole('button', { name: 'Channels', exact: true })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByTestId('sidebar')).toBeVisible({ timeout: 10_000 });
 }
 
 /**
@@ -72,5 +72,31 @@ export async function sendMessage(page: Page, text: string) {
 export async function waitForMessage(page: Page, text: string) {
   await expect(
     page.locator('.group.relative.flex.px-5').filter({ hasText: text })
+  ).toBeVisible({ timeout: 10_000 });
+}
+
+/**
+ * Click a channel by name in the sidebar.
+ * Scopes to the sidebar and matches the channel name span to avoid strict mode
+ * violations when channel names also appear in the channel header or messages.
+ */
+export async function clickChannel(page: Page, channelName: string) {
+  const sidebar = page.getByTestId('sidebar');
+  await sidebar
+    .locator('button')
+    .filter({ has: page.locator('span.truncate', { hasText: channelName }) })
+    .first()
+    .click();
+}
+
+/**
+ * Assert a channel is visible in the sidebar by name.
+ */
+export async function expectChannelInSidebar(page: Page, channelName: string) {
+  await expect(
+    page.getByTestId('sidebar')
+      .locator('button')
+      .filter({ has: page.locator('span.truncate', { hasText: channelName }) })
+      .first()
   ).toBeVisible({ timeout: 10_000 });
 }

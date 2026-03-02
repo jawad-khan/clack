@@ -62,7 +62,7 @@ router.post('/:id/reply', authMiddleware, async (req: AuthRequest, res: Response
       },
       include: {
         user: {
-          select: { id: true, name: true, email: true },
+          select: { id: true, name: true, email: true, avatar: true },
         },
       },
     });
@@ -92,7 +92,7 @@ router.get('/:id/thread', authMiddleware, async (req: AuthRequest, res: Response
       where: { id: parentId },
       include: {
         user: {
-          select: { id: true, name: true, email: true },
+          select: { id: true, name: true, email: true, avatar: true },
         },
       },
     });
@@ -106,7 +106,7 @@ router.get('/:id/thread', authMiddleware, async (req: AuthRequest, res: Response
       where: { threadId: parentId, deletedAt: null },
       include: {
         user: {
-          select: { id: true, name: true, email: true },
+          select: { id: true, name: true, email: true, avatar: true },
         },
       },
       orderBy: { createdAt: 'asc' },

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { register, uniqueEmail } from './helpers';
+import { register, uniqueEmail, clickChannel } from './helpers';
 
 test.describe('@Mentions', () => {
   test('user can @mention another user in a message', async ({ browser }) => {
@@ -19,7 +19,7 @@ test.describe('@Mentions', () => {
     await register(page2, name2, email2, 'password123');
 
     // User 1 selects general channel
-    await page1.locator('button').filter({ hasText: 'general' }).click();
+    await clickChannel(page1, 'general');
     await expect(page1.locator('.ql-editor')).toBeVisible({ timeout: 5000 });
 
     // Type @ followed by partial name to trigger mention dropdown
@@ -55,7 +55,7 @@ test.describe('@Mentions', () => {
     const email = uniqueEmail();
     await register(page, 'MentionBtn User', email, 'password123');
 
-    await page.locator('button').filter({ hasText: 'general' }).click();
+    await clickChannel(page, 'general');
     await expect(page.locator('.ql-editor')).toBeVisible({ timeout: 5000 });
 
     // Click the @ button in the toolbar

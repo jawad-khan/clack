@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { register, uniqueEmail } from './helpers';
+import { register, uniqueEmail, clickChannel } from './helpers';
 
 test.describe('User Profiles', () => {
   test('user can view and edit their profile', async ({ page }) => {
@@ -8,7 +8,7 @@ test.describe('User Profiles', () => {
     await register(page, name, email, 'password123');
 
     // Wait for sidebar to load
-    await page.locator('button').filter({ hasText: 'general' }).click();
+    await clickChannel(page, 'general');
     await expect(page.locator('.ql-editor')).toBeVisible({ timeout: 5000 });
 
     // Click on user avatar in sidebar to open user menu
@@ -46,14 +46,14 @@ test.describe('User Profiles', () => {
 
     // Register first user and send a message
     await register(page, name1, email1, 'password123');
-    await page.locator('button').filter({ hasText: 'general' }).click();
+    await clickChannel(page, 'general');
     await expect(page.locator('.ql-editor')).toBeVisible({ timeout: 5000 });
 
     // Register second user in a new context
     const context2 = await browser.newContext();
     const page2 = await context2.newPage();
     await register(page2, name2, email2, 'password123');
-    await page2.locator('button').filter({ hasText: 'general' }).click();
+    await clickChannel(page2, 'general');
     await expect(page2.locator('.ql-editor')).toBeVisible({ timeout: 5000 });
 
     // User 2 sends a message

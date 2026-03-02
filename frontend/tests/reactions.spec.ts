@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { register, sendMessage, waitForMessage, uniqueEmail } from './helpers';
+import { register, sendMessage, waitForMessage, uniqueEmail, clickChannel } from './helpers';
 
 /**
  * Helper: open emoji picker from hover toolbar, search for an emoji, and click it.
@@ -29,7 +29,7 @@ test.describe('Reactions', () => {
     const email = uniqueEmail();
     await register(page, 'Reaction Tester', email, 'password123');
     // Explicitly click general to ensure channel is loaded and socket has joined
-    await page.locator('button').filter({ hasText: 'general' }).first().click();
+    await clickChannel(page, 'general');
     await expect(page.locator('.ql-editor')).toBeVisible({ timeout: 10_000 });
     // Give socket time to join the channel room
     await page.waitForTimeout(500);

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, sendMessage, waitForMessage, uniqueEmail, register } from './helpers';
+import { login, sendMessage, waitForMessage, uniqueEmail, register, clickChannel } from './helpers';
 
 test.describe('Messaging', () => {
   test.beforeEach(async ({ page }) => {
@@ -111,8 +111,8 @@ test.describe('Messaging', () => {
 
     // Wait for app to load and select general channel
     for (const page of [page1, page2]) {
-      await expect(page.getByRole('button', { name: 'Channels', exact: true })).toBeVisible({ timeout: 10_000 });
-      await page.locator('button').filter({ hasText: 'general' }).click();
+      await expect(page.getByTestId('sidebar')).toBeVisible({ timeout: 10_000 });
+      await clickChannel(page, 'general');
       await expect(page.locator('.ql-editor')).toBeVisible({ timeout: 5_000 });
     }
 

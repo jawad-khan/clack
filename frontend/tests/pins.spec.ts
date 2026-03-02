@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { register, uniqueEmail, sendMessage, waitForMessage } from './helpers';
+import { register, uniqueEmail, sendMessage, waitForMessage, clickChannel } from './helpers';
 
 test.describe('Pinned Messages', () => {
   test('user can pin a message and view it in pins panel', async ({ page }) => {
@@ -7,7 +7,7 @@ test.describe('Pinned Messages', () => {
     await register(page, 'PinTester', email, 'password123');
 
     // Select general channel
-    await page.locator('button').filter({ hasText: 'general' }).click();
+    await clickChannel(page, 'general');
     await expect(page.locator('.ql-editor')).toBeVisible({ timeout: 5000 });
 
     // Send a message to pin
