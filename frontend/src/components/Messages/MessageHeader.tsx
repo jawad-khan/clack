@@ -23,6 +23,7 @@ const headerTabs = [
 export function MessageHeader({ channel, showMembers, onToggleMembers, onTogglePins, showPins }: MessageHeaderProps) {
   const toggleStar = useChannelStore((s) => s.toggleStar);
   const leaveChannel = useChannelStore((s) => s.leaveChannel);
+  const setActiveChannel = useChannelStore((s) => s.setActiveChannel);
   const [activeTab, setActiveTab] = useState('messages');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
@@ -88,6 +89,15 @@ export function MessageHeader({ channel, showMembers, onToggleMembers, onToggleP
     }
   };
 
+  const handleResultClick = (result: SearchResult) => {
+    if (result.channel) {
+      setActiveChannel(result.channel.id);
+    }
+    setSearchQuery('');
+    setShowResults(false);
+    setSearchResults([]);
+  };
+
   return (
     <header className="flex flex-col border-b border-[#E0E0E0] bg-white">
       {/* Top Row - Channel name and actions */}
@@ -149,9 +159,11 @@ export function MessageHeader({ channel, showMembers, onToggleMembers, onToggleP
                       {searchResults.length} result{searchResults.length !== 1 ? 's' : ''}
                     </div>
                     {searchResults.map((result) => (
-                      <div
+                      <button
                         key={`${result.type}-${result.id}`}
-                        className="px-3 py-2 hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
+                        data-testid="search-result-item"
+                        onClick={() => handleResultClick(result)}
+                        className="w-full text-left px-3 py-2 hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
                       >
                         <div className="flex items-center gap-1 text-xs text-gray-500">
                           <span className="font-medium text-gray-700">{result.user.name}</span>
@@ -163,7 +175,7 @@ export function MessageHeader({ channel, showMembers, onToggleMembers, onToggleP
                           )}
                         </div>
                         <p className="mt-0.5 text-sm text-gray-900 line-clamp-2">{renderMessageContent(result.content)}</p>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 )}
