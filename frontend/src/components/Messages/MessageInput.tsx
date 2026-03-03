@@ -572,6 +572,7 @@ export function MessageInput({ channelId, channelName }: MessageInputProps) {
           {/* Send button group with schedule dropdown */}
           <div className="flex items-center relative" ref={scheduleMenuRef}>
             <button
+              data-testid="send-button"
               onClick={handleSend}
               disabled={!hasContent}
               className={cn(

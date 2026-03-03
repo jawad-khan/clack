@@ -22,7 +22,8 @@ export async function login(
   await page.getByRole('button', { name: /sign in with email/i }).click();
 
   // Wait for the main app layout to appear (sidebar with channels)
-  await expect(page.getByTestId('sidebar')).toBeVisible({ timeout: 10_000 });
+  // Use a longer timeout to handle backend contention under parallel test workers
+  await expect(page.getByTestId('sidebar')).toBeVisible({ timeout: 20_000 });
 }
 
 /**

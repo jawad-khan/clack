@@ -28,7 +28,7 @@ test.describe('Bug #6: File attachment included in sent message', () => {
     await expect(page.locator('[data-testid="file-preview"]')).toBeVisible({ timeout: 5_000 });
 
     // Send the message (click the send button)
-    await page.locator('button[class*="bg-\\[\\#007a5a\\]"]').click();
+    await page.getByTestId('send-button').click();
 
     // The message with the file attachment should appear in the chat
     await expect(page.locator('[data-testid="message-file"]').first()).toBeVisible({ timeout: 5_000 });

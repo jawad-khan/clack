@@ -114,6 +114,7 @@ test.describe('Pinned Messages', () => {
     const messageRow1 = page1.locator('.group.relative.flex.px-5').filter({ hasText: uniqueText }).first();
     await messageRow1.hover();
     const hoverToolbar1 = page1.locator('.absolute.-top-4.right-5');
+    await expect(hoverToolbar1).toBeVisible({ timeout: 3000 });
     await hoverToolbar1.locator('button').last().click();
     await page1.getByText('Pin message').click();
 
