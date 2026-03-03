@@ -19,14 +19,15 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 
-  messages      Message[]
-  channels      ChannelMember[]
-  reactions     Reaction[]
-  files         File[]
-  sentDMs       DirectMessage[] @relation("SentMessages")
-  receivedDMs   DirectMessage[] @relation("ReceivedMessages")
-  channelReads  ChannelRead[]
-  bookmarks     Bookmark[]
+  messages           Message[]
+  channels           ChannelMember[]
+  reactions          Reaction[]
+  files              File[]
+  sentDMs            DirectMessage[] @relation("SentMessages")
+  receivedDMs        DirectMessage[] @relation("ReceivedMessages")
+  channelReads       ChannelRead[]
+  bookmarks          Bookmark[]
+  scheduledMessages  ScheduledMessage[]
 }
 
 model Channel {
@@ -35,9 +36,10 @@ model Channel {
   isPrivate Boolean  @default(false)
   createdAt DateTime @default(now())
 
-  messages  Message[]
-  members   ChannelMember[]
-  reads     ChannelRead[]
+  messages           Message[]
+  members            ChannelMember[]
+  reads              ChannelRead[]
+  scheduledMessages  ScheduledMessage[]
 }
 
 model ChannelMember {
@@ -152,4 +154,20 @@ model ChannelRead {
   channel Channel @relation(fields: [channelId], references: [id])
 
   @@unique([userId, channelId])
+}
+
+model ScheduledMessage {
+  id          Int      @id @default(autoincrement())
+  content     String
+  channelId   Int
+  userId      Int
+  scheduledAt DateTime
+  createdAt   DateTime @default(now())
+  sent        Boolean  @default(false)
+
+  user    User    @relation(fields: [userId], references: [id])
+  channel Channel @relation(fields: [channelId], references: [id])
+
+  @@index([scheduledAt, sent])
+  @@index([userId])
 }

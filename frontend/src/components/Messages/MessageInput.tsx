@@ -18,11 +18,15 @@ import {
   X,
   FileIcon,
   Link2,
+  Clock,
+  ChevronDown,
+  Calendar,
+  CheckCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useMessageStore } from '@/stores/useMessageStore';
 import { EmojiPicker } from '@/components/ui/emoji-picker';
-import { uploadFile, getUsers, type ApiFile, type AuthUser } from '@/lib/api';
+import { uploadFile, getUsers, scheduleMessage, type ApiFile, type AuthUser } from '@/lib/api';
 
 interface MessageInputProps {
   channelId: number;
@@ -61,6 +65,15 @@ export function MessageInput({ channelId, channelName }: MessageInputProps) {
   const linkUrlInputRef = useRef<HTMLInputElement>(null);
   const mentionDropdownRef = useRef<HTMLDivElement>(null);
   const emojiButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Schedule message state
+  const [showScheduleMenu, setShowScheduleMenu] = useState(false);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [customScheduleAt, setCustomScheduleAt] = useState('');
+  const [scheduleConfirm, setScheduleConfirm] = useState<string | null>(null);
+  const [isScheduling, setIsScheduling] = useState(false);
+  const scheduleMenuRef = useRef<HTMLDivElement>(null);
+
   const { sendMessage } = useMessageStore();
 
   const serializeDelta = useCallback((quill: Quill): string => {
@@ -132,6 +145,74 @@ export function MessageInput({ channelId, channelName }: MessageInputProps) {
     setCanSend(false);
     await sendMessage(channelId, content, fileIds.length > 0 ? fileIds : undefined);
   }, [channelId, sendMessage, pendingFiles, serializeDelta]);
+
+  // Build preset schedule options relative to now
+  const getPresetOptions = useCallback(() => {
+    const now = new Date();
+    const opts: { label: string; date: Date }[] = [];
+
+    const in20 = new Date(now.getTime() + 20 * 60 * 1000);
+    opts.push({ label: 'In 20 minutes', date: in20 });
+
+    const in1h = new Date(now.getTime() + 60 * 60 * 1000);
+    opts.push({ label: 'In 1 hour', date: in1h });
+
+    const in3h = new Date(now.getTime() + 3 * 60 * 60 * 1000);
+    opts.push({ label: 'In 3 hours', date: in3h });
+
+    const tomorrow9am = new Date(now);
+    tomorrow9am.setDate(tomorrow9am.getDate() + 1);
+    tomorrow9am.setHours(9, 0, 0, 0);
+    opts.push({ label: 'Tomorrow at 9:00 AM', date: tomorrow9am });
+
+    return opts;
+  }, []);
+
+  const handleSchedule = useCallback(
+    async (scheduledAt: Date) => {
+      const quill = quillRef.current;
+      if (!quill) return;
+      const text = serializeDelta(quill);
+      if (!text) return;
+
+      setIsScheduling(true);
+      try {
+        await scheduleMessage(channelId, text, scheduledAt);
+        quill.setText('');
+        setPendingFiles([]);
+        setCanSend(false);
+        setShowScheduleMenu(false);
+        setShowScheduleModal(false);
+
+        // Show confirmation briefly
+        const formatted = scheduledAt.toLocaleString(undefined, {
+          month: 'short',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+        });
+        setScheduleConfirm(`Scheduled for ${formatted}`);
+        setTimeout(() => setScheduleConfirm(null), 4000);
+      } catch (err) {
+        console.error('Failed to schedule message:', err);
+      } finally {
+        setIsScheduling(false);
+      }
+    },
+    [channelId, serializeDelta],
+  );
+
+  // Close schedule menu on outside click
+  useEffect(() => {
+    if (!showScheduleMenu) return;
+    const handleClick = (e: MouseEvent) => {
+      if (scheduleMenuRef.current && !scheduleMenuRef.current.contains(e.target as Node)) {
+        setShowScheduleMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showScheduleMenu]);
 
   const handleSendRef = useRef(handleSend);
   handleSendRef.current = handleSend;
@@ -229,23 +310,29 @@ export function MessageInput({ channelId, channelName }: MessageInputProps) {
         // ignore
       }
     }, 150);
-    return () => { cancelled = true; clearTimeout(timer); };
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [showMentionDropdown, mentionQuery]);
 
-  const insertMention = useCallback((user: AuthUser) => {
-    const quill = quillRef.current;
-    if (!quill || mentionStartIndex === null) return;
-    const mentionText = `@${user.name}`;
-    // Delete the @query text and insert mention
-    const deleteLength = mentionQuery.length + 1; // +1 for @
-    quill.deleteText(mentionStartIndex, deleteLength);
-    quill.insertText(mentionStartIndex, mentionText + ' ');
-    quill.setSelection(mentionStartIndex + mentionText.length + 1);
-    setShowMentionDropdown(false);
-    setMentionQuery('');
-    setMentionStartIndex(null);
-    quill.focus();
-  }, [mentionStartIndex, mentionQuery]);
+  const insertMention = useCallback(
+    (user: AuthUser) => {
+      const quill = quillRef.current;
+      if (!quill || mentionStartIndex === null) return;
+      const mentionText = `@${user.name}`;
+      // Delete the @query text and insert mention
+      const deleteLength = mentionQuery.length + 1; // +1 for @
+      quill.deleteText(mentionStartIndex, deleteLength);
+      quill.insertText(mentionStartIndex, mentionText + ' ');
+      quill.setSelection(mentionStartIndex + mentionText.length + 1);
+      setShowMentionDropdown(false);
+      setMentionQuery('');
+      setMentionStartIndex(null);
+      quill.focus();
+    },
+    [mentionStartIndex, mentionQuery],
+  );
 
   const handleMentionButtonClick = () => {
     const quill = quillRef.current;
@@ -371,7 +458,10 @@ export function MessageInput({ channelId, channelName }: MessageInputProps) {
 
         {/* File preview area */}
         {pendingFiles.length > 0 && (
-          <div data-testid="file-preview" className="flex flex-wrap gap-2 px-3 py-2 border-b border-[rgba(29,28,29,0.13)]">
+          <div
+            data-testid="file-preview"
+            className="flex flex-wrap gap-2 px-3 py-2 border-b border-[rgba(29,28,29,0.13)]"
+          >
             {pendingFiles.map((file) => (
               <div
                 key={file.id}
@@ -421,7 +511,7 @@ export function MessageInput({ channelId, channelName }: MessageInputProps) {
                 onClick={() => insertMention(user)}
                 className={cn(
                   'flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-[#1264A3] hover:text-white',
-                  index === mentionSelectedIndex ? 'bg-[#1264A3] text-white' : 'text-[#1D1C1D]'
+                  index === mentionSelectedIndex ? 'bg-[#1264A3] text-white' : 'text-[#1D1C1D]',
                 )}
               >
                 <div className="flex h-6 w-6 items-center justify-center rounded bg-[#611f69] text-white text-xs font-medium flex-shrink-0">
@@ -479,31 +569,168 @@ export function MessageInput({ channelId, channelName }: MessageInputProps) {
             </button>
           </div>
 
-          <button
-            onClick={handleSend}
-            disabled={!hasContent}
-            className={cn(
-              'flex h-7 w-7 items-center justify-center rounded transition-colors',
-              hasContent
-                ? 'bg-[#007a5a] text-white hover:bg-[#005e46]'
-                : 'text-gray-400'
+          {/* Send button group with schedule dropdown */}
+          <div className="flex items-center relative" ref={scheduleMenuRef}>
+            <button
+              onClick={handleSend}
+              disabled={!hasContent}
+              className={cn(
+                'flex h-7 items-center justify-center rounded-l px-2 transition-colors',
+                hasContent
+                  ? 'bg-[#007a5a] text-white hover:bg-[#005e46]'
+                  : 'text-gray-400',
+              )}
+            >
+              <SendHorizontal className="h-4 w-4" />
+            </button>
+            {/* Schedule dropdown arrow */}
+            <button
+              data-testid="schedule-button"
+              onClick={() => hasContent && setShowScheduleMenu((v) => !v)}
+              disabled={!hasContent}
+              className={cn(
+                'flex h-7 w-5 items-center justify-center rounded-r border-l transition-colors',
+                hasContent
+                  ? 'bg-[#007a5a] text-white hover:bg-[#005e46] border-[#005e46]'
+                  : 'text-gray-300 border-gray-300',
+              )}
+              title="Schedule message"
+            >
+              <ChevronDown className="h-3 w-3" />
+            </button>
+
+            {/* Schedule dropdown menu */}
+            {showScheduleMenu && (
+              <div
+                data-testid="schedule-menu"
+                className="absolute bottom-full right-0 mb-1 w-56 rounded-lg border border-gray-200 bg-white shadow-lg z-50 overflow-hidden"
+              >
+                <div className="px-3 py-2 text-[11px] font-semibold text-[#616061] uppercase tracking-wider border-b border-gray-100">
+                  Schedule message
+                </div>
+                {getPresetOptions().map((opt) => (
+                  <button
+                    key={opt.label}
+                    onClick={() => handleSchedule(opt.date)}
+                    disabled={isScheduling}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] text-[#1D1C1D] hover:bg-[#F8F8F8] transition-colors"
+                  >
+                    <Clock className="h-3.5 w-3.5 text-[#616061] flex-shrink-0" />
+                    <div>
+                      <div className="font-medium">{opt.label}</div>
+                      <div className="text-[11px] text-[#616061]">
+                        {opt.date.toLocaleString(undefined, {
+                          weekday: 'short',
+                          month: 'short',
+                          day: 'numeric',
+                          hour: 'numeric',
+                          minute: '2-digit',
+                        })}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+                <div className="border-t border-gray-100">
+                  <button
+                    onClick={() => {
+                      setShowScheduleMenu(false);
+                      setShowScheduleModal(true);
+                      // Default to 1 hour from now
+                      const d = new Date(Date.now() + 60 * 60 * 1000);
+                      const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+                      setCustomScheduleAt(local.toISOString().slice(0, 16));
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] text-[#1D1C1D] hover:bg-[#F8F8F8] transition-colors"
+                  >
+                    <Calendar className="h-3.5 w-3.5 text-[#616061] flex-shrink-0" />
+                    <span className="font-medium">Custom time...</span>
+                  </button>
+                </div>
+              </div>
             )}
-          >
-            <SendHorizontal className="h-4 w-4" />
-          </button>
+          </div>
         </div>
       </div>
 
       <p className="mt-1 text-xs text-gray-500">
-        <kbd className="rounded bg-gray-100 px-1 py-0.5 text-[10px] font-medium">
-          Enter
-        </kbd>{' '}
+        <kbd className="rounded bg-gray-100 px-1 py-0.5 text-[10px] font-medium">Enter</kbd>{' '}
         to send,{' '}
         <kbd className="rounded bg-gray-100 px-1 py-0.5 text-[10px] font-medium">
           Shift + Enter
         </kbd>{' '}
         for new line
       </p>
+
+      {/* Schedule confirmation banner */}
+      {scheduleConfirm && (
+        <div
+          data-testid="schedule-confirm"
+          className="mt-2 flex items-center gap-2 rounded-md bg-[#E3F4EC] px-3 py-2 text-[13px] text-[#007a5a] font-medium"
+        >
+          <CheckCircle className="h-4 w-4 flex-shrink-0" />
+          {scheduleConfirm}
+        </div>
+      )}
+
+      {/* Custom schedule modal */}
+      {showScheduleModal && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowScheduleModal(false);
+          }}
+        >
+          <div className="absolute inset-0 bg-black/40" />
+          <div className="relative z-10 w-[380px] rounded-xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-[rgba(29,28,29,0.13)] px-5 py-4">
+              <div className="flex items-center gap-2">
+                <Clock className="h-5 w-5 text-[#1264A3]" />
+                <h2 className="text-[17px] font-bold text-[#1D1C1D]">Schedule message</h2>
+              </div>
+              <button
+                onClick={() => setShowScheduleModal(false)}
+                className="flex h-7 w-7 items-center justify-center rounded text-[#616061] hover:bg-[#F8F8F8]"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="px-5 py-4 flex flex-col gap-3">
+              <label className="text-[13px] font-semibold text-[#1D1C1D]">Date and time</label>
+              <input
+                data-testid="custom-schedule-input"
+                type="datetime-local"
+                value={customScheduleAt}
+                onChange={(e) => setCustomScheduleAt(e.target.value)}
+                min={new Date(Date.now() + 60 * 1000).toISOString().slice(0, 16)}
+                className="h-9 w-full rounded-md border border-[rgba(29,28,29,0.3)] px-3 text-[14px] text-[#1D1C1D] outline-none focus:border-[#1264A3] focus:ring-1 focus:ring-[#1264A3]"
+              />
+            </div>
+            <div className="flex items-center justify-end gap-2 border-t border-[rgba(29,28,29,0.13)] px-5 py-3">
+              <button
+                onClick={() => setShowScheduleModal(false)}
+                className="rounded-md border border-[rgba(29,28,29,0.3)] bg-white px-4 py-1.5 text-[14px] font-medium text-[#1D1C1D] hover:bg-[#F8F8F8] transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={!customScheduleAt || isScheduling}
+                onClick={() => {
+                  if (!customScheduleAt) return;
+                  handleSchedule(new Date(customScheduleAt));
+                }}
+                className={cn(
+                  'rounded-md px-4 py-1.5 text-[14px] font-medium text-white transition-colors',
+                  customScheduleAt && !isScheduling
+                    ? 'bg-[#007a5a] hover:bg-[#005e46]'
+                    : 'bg-gray-300 cursor-not-allowed',
+                )}
+              >
+                {isScheduling ? 'Scheduling...' : 'Schedule'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Link Modal */}
       {showLinkModal && (
@@ -543,9 +770,7 @@ export function MessageInput({ channelId, channelName }: MessageInputProps) {
             {/* Body */}
             <div className="px-5 py-4 flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
-                <label className="text-[13px] font-semibold text-[#1D1C1D]">
-                  URL
-                </label>
+                <label className="text-[13px] font-semibold text-[#1D1C1D]">URL</label>
                 <input
                   ref={linkUrlInputRef}
                   data-testid="link-url-input"
@@ -566,7 +791,8 @@ export function MessageInput({ channelId, channelName }: MessageInputProps) {
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-[13px] font-semibold text-[#1D1C1D]">
-                  Display text <span className="font-normal text-[#616061]">(optional)</span>
+                  Display text{' '}
+                  <span className="font-normal text-[#616061]">(optional)</span>
                 </label>
                 <input
                   data-testid="link-text-input"
@@ -606,7 +832,7 @@ export function MessageInput({ channelId, channelName }: MessageInputProps) {
                   'rounded-md px-4 py-1.5 text-[14px] font-medium text-white transition-colors',
                   linkUrl.trim()
                     ? 'bg-[#007a5a] hover:bg-[#005e46]'
-                    : 'bg-gray-300 cursor-not-allowed'
+                    : 'bg-gray-300 cursor-not-allowed',
                 )}
               >
                 Save

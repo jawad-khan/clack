@@ -15,6 +15,7 @@ import fileRoutes from './routes/files.js';
 import userRoutes from './routes/users.js';
 import dmRoutes from './routes/dms.js';
 import bookmarkRoutes from './routes/bookmarks.js';
+import scheduledMessageRoutes from './routes/scheduled-messages.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
 const app = express();
@@ -37,6 +38,7 @@ app.use('/users', userRoutes);
 app.use('/dms', dmRoutes);
 app.use('/messages', bookmarkRoutes);
 app.use('/bookmarks', bookmarkRoutes);
+app.use('/messages', scheduledMessageRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

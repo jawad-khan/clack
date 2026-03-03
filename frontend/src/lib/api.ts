@@ -243,6 +243,19 @@ export interface ApiFile {
   url: string;
 }
 
+export interface ApiFileWithUser extends ApiFile {
+  createdAt: string;
+  user: { id: number; name: string; email: string; avatar?: string | null };
+}
+
+export function getChannelFiles(channelId: number) {
+  return request<ApiFileWithUser[]>(`/channels/${channelId}/files`);
+}
+
+export function getUserFiles() {
+  return request<ApiFileWithUser[]>('/files');
+}
+
 export async function uploadFile(file: File): Promise<ApiFile> {
   const token = localStorage.getItem('token');
   const formData = new FormData();
