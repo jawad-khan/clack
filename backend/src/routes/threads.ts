@@ -3,6 +3,7 @@ import { z } from 'zod';
 import prisma from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { AuthRequest } from '../types.js';
+import { getIO } from '../websocket/index.js';
 
 const router = Router();
 
@@ -264,6 +265,12 @@ router.post('/:id/pin', authMiddleware, async (req: AuthRequest, res: Response) 
       },
     });
 
+    // Broadcast the updated message to all users in the channel
+    const io = getIO();
+    if (io) {
+      io.to(`channel:${updated.channelId}`).emit('message:updated', updated);
+    }
+
     res.json(updated);
   } catch (error) {
     console.error('Pin message error:', error);
@@ -310,6 +317,12 @@ router.delete('/:id/pin', authMiddleware, async (req: AuthRequest, res: Response
         _count: { select: { replies: true } },
       },
     });
+
+    // Broadcast the updated message to all users in the channel
+    const io = getIO();
+    if (io) {
+      io.to(`channel:${updated.channelId}`).emit('message:updated', updated);
+    }
 
     res.json(updated);
   } catch (error) {

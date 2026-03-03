@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { X, Pin } from 'lucide-react';
 import { format } from 'date-fns';
 import { getPinnedMessages, type ApiMessage } from '@/lib/api';
+import { getSocket } from '@/lib/socket';
 import { Avatar } from '@/components/ui/avatar';
 import { renderMessageContent } from '@/lib/renderMessageContent';
 
@@ -14,12 +15,36 @@ export function PinsPanel({ channelId, onClose }: PinsPanelProps) {
   const [pins, setPins] = useState<ApiMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
+  const fetchPins = useCallback(() => {
     setIsLoading(true);
     getPinnedMessages(channelId)
       .then((data) => setPins(data))
       .catch((err) => console.error('Failed to fetch pins:', err))
       .finally(() => setIsLoading(false));
+  }, [channelId]);
+
+  useEffect(() => {
+    fetchPins();
+  }, [fetchPins]);
+
+  // Listen for message:updated events — refresh pins when a message in this
+  // channel is pinned or unpinned so the panel stays current without a reload.
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket) return;
+
+    const handleMessageUpdated = (msg: ApiMessage) => {
+      if (msg.channelId !== channelId) return;
+      // Re-fetch the canonical pin list from the server
+      getPinnedMessages(channelId)
+        .then((data) => setPins(data))
+        .catch((err) => console.error('Failed to refresh pins:', err));
+    };
+
+    socket.on('message:updated', handleMessageUpdated);
+    return () => {
+      socket.off('message:updated', handleMessageUpdated);
+    };
   }, [channelId]);
 
   return (

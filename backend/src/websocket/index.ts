@@ -60,6 +60,9 @@ export function initializeWebSocket(httpServer: HttpServer) {
     },
   });
 
+  // Store module-level reference so REST routes can broadcast events
+  ioInstance = io;
+
   // Authentication middleware
   io.use((socket: AuthenticatedSocket, next) => {
     const token = socket.handshake.auth.token;
@@ -433,6 +436,13 @@ export function initializeWebSocket(httpServer: HttpServer) {
   });
 
   return io;
+}
+
+// Module-level io reference so REST routes can emit events
+let ioInstance: Server | null = null;
+
+export function getIO(): Server | null {
+  return ioInstance;
 }
 
 // Export for use in REST endpoints
