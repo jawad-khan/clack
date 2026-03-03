@@ -52,16 +52,25 @@ Use Browser MCP to test like a human user. Click through features, take screensh
 
 ### 4. When You Find a Bug
 
-**Screenshot pipeline** (`upload_image` is broken, `gh` CLI doesn't support image attachments — use GIF export + GCS instead):
+**Capturing evidence** — always use the GIF creator/exporter (not the `screenshot` action, which has no download/export). A 1-frame GIF works as a screenshot.
+
+- **Static bug** (visual issue, wrong color, layout problem): record, capture one frame, stop, export.
+- **Interaction bug** (sequence of steps, real-time failure, animation issue): record, perform the full repro steps (clicks, scrolls, typing), stop, export — this produces an animated GIF showing the problem.
 
 ```
-# 1. Start recording, capture a frame, stop, export
+# 1. Start recording
 gif_creator({ action: "start_recording", tabId })
+
+# 2. Capture evidence:
+#    - Static bug: one small action (e.g., a single scroll) to grab a frame
+#    - Interaction bug: perform the full repro steps (clicks, navigation, etc.)
 computer({ action: "scroll", coordinate: [400, 400], scroll_direction: "up", scroll_amount: 1, tabId })
+
+# 3. Stop and export
 gif_creator({ action: "stop_recording", tabId })
 gif_creator({ action: "export", tabId, filename: "bug-name.gif", download: true, options: { showClickIndicators: false, showActionLabels: false, showProgressBar: false, showWatermark: false, quality: 1 } })
 
-# 2. Upload to GCS
+# 4. Upload to GCS
 gcloud storage cp screenshots/bug-name.gif gs://slawk-screenshots/bug-name.gif
 ```
 
