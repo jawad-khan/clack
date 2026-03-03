@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useNavigate, useParams } from 'react-router-dom';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useChannelStore } from '@/stores/useChannelStore';
 import { useMessageStore } from '@/stores/useMessageStore';
@@ -28,11 +28,55 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+/**
+ * Syncs URL params to the channel store.
+ * - /channels/:channelId  → sets activeChannelId
+ * - /dm/:userId           → sets activeDMId
+ */
+function RouteSync() {
+  const { channelId, userId } = useParams<{ channelId?: string; userId?: string }>();
+  const setActiveChannel = useChannelStore((s) => s.setActiveChannel);
+  const setActiveDM = useChannelStore((s) => s.setActiveDM);
+
+  useEffect(() => {
+    if (channelId) {
+      const id = parseInt(channelId, 10);
+      if (!isNaN(id)) {
+        setActiveChannel(id);
+      }
+    } else if (userId) {
+      const id = parseInt(userId, 10);
+      if (!isNaN(id)) {
+        setActiveDM(id);
+      }
+    }
+  }, [channelId, userId, setActiveChannel, setActiveDM]);
+
+  return null;
+}
+
+/**
+ * Redirects / to /channels/:id for the first available member channel.
+ */
+function DefaultRedirect() {
+  const channels = useChannelStore((s) => s.channels);
+  const isLoading = useChannelStore((s) => s.isLoading);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (isLoading) return;
+    const firstChannel = channels.find((ch) => ch.isMember);
+    if (firstChannel) {
+      navigate(`/c/${firstChannel.id}`, { replace: true });
+    }
+  }, [channels, isLoading, navigate]);
+
+  return null;
+}
+
 function AppShell() {
   const fetchChannels = useChannelStore((s) => s.fetchChannels);
   const channels = useChannelStore((s) => s.channels);
-  const activeChannelId = useChannelStore((s) => s.activeChannelId);
-  const { onMessageNew, onMessageUpdated, onMessageDeleted } = useMessageStore();
   const joinedChannelsRef = useRef<Set<number>>(new Set());
 
   const fetchDirectMessages = useChannelStore((s) => s.fetchDirectMessages);
@@ -114,7 +158,12 @@ function AppShell() {
     };
   }, [channels]);
 
-  return <AppLayout />;
+  return (
+    <>
+      <Outlet />
+      <AppLayout />
+    </>
+  );
 }
 
 function App() {
@@ -144,13 +193,17 @@ function App() {
           }
         />
         <Route
-          path="/*"
+          path="/"
           element={
             <ProtectedRoute>
               <AppShell />
             </ProtectedRoute>
           }
-        />
+        >
+          <Route index element={<DefaultRedirect />} />
+          <Route path="c/:channelId" element={<RouteSync />} />
+          <Route path="d/:userId" element={<RouteSync />} />
+        </Route>
       </Routes>
     </BrowserRouter>
   );

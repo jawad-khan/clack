@@ -81,13 +81,10 @@ export const useChannelStore = create<ChannelState>((set, get) => ({
         isMember: ch.isMember,
         isStarred: starred.has(ch.id),
       }));
-      const memberChannels = channels.filter((ch) => ch.isMember);
-      set((state) => ({
+      set({
         channels,
         isLoading: false,
-        // Auto-select first member channel if none selected
-        activeChannelId: state.activeChannelId ?? memberChannels[0]?.id ?? null,
-      }));
+      });
     } catch (err) {
       console.error('Failed to fetch channels:', err);
       set({ isLoading: false });

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Home,
   MessageSquare,
@@ -26,6 +27,7 @@ const navItems = [
 ];
 
 export function Sidebar() {
+  const navigate = useNavigate();
   const { channels, directMessages, activeChannelId, activeDMId, setActiveChannel, setActiveDM, startDM, createChannel, joinChannel, fetchChannels } =
     useChannelStore();
   const { user, logout } = useAuthStore();
@@ -211,7 +213,7 @@ export function Sidebar() {
                     key={channel.id}
                     channel={channel}
                     isActive={activeChannelId === channel.id}
-                    onClick={() => setActiveChannel(channel.id)}
+                    onClick={() => navigate(`/c/${channel.id}`)}
                     isPrivate={channel.isPrivate}
                   />
                 ))}
@@ -240,7 +242,7 @@ export function Sidebar() {
                     key={channel.id}
                     channel={channel}
                     isActive={activeChannelId === channel.id}
-                    onClick={() => setActiveChannel(channel.id)}
+                    onClick={() => navigate(`/c/${channel.id}`)}
                   />
                 ))}
                 {privateChannels.map((channel) => (
@@ -248,7 +250,7 @@ export function Sidebar() {
                     key={channel.id}
                     channel={channel}
                     isActive={activeChannelId === channel.id}
-                    onClick={() => setActiveChannel(channel.id)}
+                    onClick={() => navigate(`/c/${channel.id}`)}
                     isPrivate
                   />
                 ))}
@@ -284,7 +286,7 @@ export function Sidebar() {
                     key={dm.id}
                     dm={dm}
                     isActive={activeDMId === dm.id}
-                    onClick={() => setActiveDM(dm.id)}
+                    onClick={() => navigate(`/d/${dm.userId}`)}
                   />
                 ))}
                 <button
@@ -444,6 +446,7 @@ export function Sidebar() {
                     onClick={() => {
                       startDM(u.id, u.name, u.avatar ?? undefined);
                       setShowAddTeammates(false);
+                      navigate(`/d/${u.id}`);
                     }}
                     className="flex w-full items-center gap-3 rounded px-3 py-2 hover:bg-gray-50 text-left"
                   >
