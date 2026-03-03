@@ -50,13 +50,17 @@ Prioritize: features not covered by existing issues, recently changed code, and 
 
 Use Browser MCP to test like a human user. Click through features, take screenshots of bugs, and test edge cases.
 
+**Visual comparison:** Open the real Slack workspace in a second MCP tab using `tabs_create_mcp` and navigate to `https://app.slack.com/client/T017A503B3M`. Keep both tabs open throughout testing — one for Slawk, one for real Slack. When testing a feature in Slawk, switch to the Slack tab, navigate to the same feature, and screenshot both to compare. This is especially important for UI/UX bugs — colors, spacing, layout, icons, and toolbar differences should match real Slack.
+
 **Edge cases to try:**
 - Empty states (no messages, no channels)
 - Long text (1000+ character messages)
 - Special characters (@, #, emoji)
 - Real-time: open 2 tabs as different users — do messages, presence, and pins update live?
 
-### 4. When You Find a Bug
+### 4. When You Find a Bug — File It Immediately
+
+**IMPORTANT: Do NOT accumulate bugs.** The moment you find a bug, stop testing and file a GitHub issue for it (screenshot, upload, create issue). Only after the issue is created, resume testing for the next bug. Never batch bugs — one bug, one issue, then move on.
 
 **Capturing evidence** — always use the GIF creator/exporter (not the `screenshot` action, which has no download/export). A 1-frame GIF works as a screenshot.
 
@@ -115,7 +119,7 @@ EOF
 - `Medium` — Feature works but has issues
 - `Low` — Visual/UX polish, minor inconsistencies
 
-After creating an issue, move to the next feature. Never stop.
+After the issue is created, resume testing the next feature. Never stop testing.
 
 ## What to Report (and What Not To)
 
