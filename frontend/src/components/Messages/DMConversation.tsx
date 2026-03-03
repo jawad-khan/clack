@@ -1,6 +1,16 @@
 import { useState, useEffect, useRef } from 'react';
 import { format, isToday, isYesterday } from 'date-fns';
-import { SendHorizontal, Smile, MessageSquare, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import {
+  SendHorizontal,
+  Smile,
+  MessageSquare,
+  MoreHorizontal,
+  Pencil,
+  Trash2,
+  Pin,
+  FileText,
+  X,
+} from 'lucide-react';
 import { Avatar } from '@/components/ui/avatar';
 import { EmojiPicker } from '@/components/ui/emoji-picker';
 import { getConversation, sendDM, editDM, deleteDM, type ApiDirectMessage } from '@/lib/api';
@@ -28,6 +38,11 @@ function formatDateSeparator(date: Date): string {
   return format(date, 'EEEE, MMMM d');
 }
 
+const dmHeaderTabs = [
+  { id: 'files', label: 'Files', icon: FileText },
+  { id: 'pins', label: 'Pins', icon: Pin },
+];
+
 export function DMConversation({ userId, userName, userAvatar }: DMConversationProps) {
   const [messages, setMessages] = useState<DMMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -38,6 +53,8 @@ export function DMConversation({ userId, userName, userAvatar }: DMConversationP
   const [showEmojiPickerId, setShowEmojiPickerId] = useState<number | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editContent, setEditContent] = useState('');
+  const [showPins, setShowPins] = useState(false);
+  const [showFiles, setShowFiles] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const editInputRef = useRef<HTMLTextAreaElement>(null);
   const hoverLeaveTimer = useRef<ReturnType<typeof setTimeout>>();
@@ -69,7 +86,9 @@ export function DMConversation({ userId, userName, userAvatar }: DMConversationP
         if (!cancelled) setIsLoading(false);
       });
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [userId]);
 
   useEffect(() => {
@@ -121,7 +140,7 @@ export function DMConversation({ userId, userName, userAvatar }: DMConversationP
       try {
         const updated = await editDM(editingId, trimmed);
         setMessages((prev) =>
-          prev.map((m) => (m.id === editingId ? transformDM(updated) : m))
+          prev.map((m) => (m.id === editingId ? transformDM(updated) : m)),
         );
       } catch (err) {
         console.error('Failed to edit DM:', err);
@@ -161,246 +180,340 @@ export function DMConversation({ userId, userName, userAvatar }: DMConversationP
   return (
     <div data-testid="dm-conversation" className="flex h-full flex-col">
       {/* Header */}
-      <header className="flex h-[49px] items-center border-b border-[#E0E0E0] bg-white px-4">
-        <Avatar
-          src={userAvatar || undefined}
-          alt={userName}
-          fallback={userName}
-          size="md"
-          status="online"
-        />
-        <span className="ml-2 text-[18px] font-bold text-[#1D1C1D]">{userName}</span>
+      <header className="flex flex-col border-b border-[#E0E0E0] bg-white">
+        {/* Top Row */}
+        <div className="flex h-[49px] items-center px-4">
+          <Avatar
+            src={userAvatar || undefined}
+            alt={userName}
+            fallback={userName}
+            size="md"
+            status="online"
+          />
+          <span className="ml-2 text-[18px] font-bold text-[#1D1C1D]">{userName}</span>
+        </div>
+        {/* Tabs Row */}
+        <div className="flex items-center gap-0.5 px-4 pb-[6px]">
+          {dmHeaderTabs.map((tab) => (
+            <button
+              key={tab.id}
+              data-testid={`dm-header-tab-${tab.id}`}
+              onClick={() => {
+                if (tab.id === 'pins') {
+                  setShowPins((prev) => !prev);
+                  setShowFiles(false);
+                } else if (tab.id === 'files') {
+                  setShowFiles((prev) => !prev);
+                  setShowPins(false);
+                }
+              }}
+              className={cn(
+                'flex items-center gap-1 rounded px-2 py-[3px] text-[13px] transition-colors',
+                (tab.id === 'pins' && showPins) || (tab.id === 'files' && showFiles)
+                  ? 'bg-[#F0F0F0] text-[#1D1C1D] font-medium'
+                  : 'text-[#616061] hover:bg-[#F8F8F8] hover:text-[#1D1C1D]',
+              )}
+            >
+              <tab.icon className="h-[14px] w-[14px]" />
+              <span>{tab.label}</span>
+            </button>
+          ))}
+        </div>
       </header>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-5 pt-5 pb-4 bg-white">
-        {isLoading ? (
-          <div className="flex items-center justify-center h-full text-gray-500 text-sm">
-            Loading messages...
-          </div>
-        ) : messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-gray-500">
-            <p className="text-lg font-medium">Start of your conversation with {userName}</p>
-            <p className="text-sm">Send a message to begin.</p>
-          </div>
-        ) : (
-          <>
-            {messages.map((msg, i) => {
-              const prevMsg = messages[i - 1];
-              const showDate = !prevMsg || !isToday(prevMsg.createdAt) && format(msg.createdAt, 'yyyy-MM-dd') !== format(prevMsg.createdAt, 'yyyy-MM-dd');
-              const showAvatar = !prevMsg || prevMsg.fromUserId !== msg.fromUserId;
-              const isOwner = currentUser?.id === msg.fromUserId;
-              const isHovered = hoveredMessageId === msg.id;
-              const isEditing = editingId === msg.id;
+      {/* Body: messages column + optional side panel */}
+      <div className="flex min-h-0 flex-1">
+        {/* Messages column */}
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          {/* Messages list */}
+          <div className="flex-1 overflow-y-auto bg-white px-5 pb-4 pt-5">
+            {isLoading ? (
+              <div className="flex h-full items-center justify-center text-sm text-gray-500">
+                Loading messages...
+              </div>
+            ) : messages.length === 0 ? (
+              <div className="flex h-full flex-col items-center justify-center text-gray-500">
+                <p className="text-lg font-medium">
+                  Start of your conversation with {userName}
+                </p>
+                <p className="text-sm">Send a message to begin.</p>
+              </div>
+            ) : (
+              <>
+                {messages.map((msg, i) => {
+                  const prevMsg = messages[i - 1];
+                  const showDate =
+                    !prevMsg ||
+                    (!isToday(prevMsg.createdAt) &&
+                      format(msg.createdAt, 'yyyy-MM-dd') !==
+                        format(prevMsg.createdAt, 'yyyy-MM-dd'));
+                  const showAvatar = !prevMsg || prevMsg.fromUserId !== msg.fromUserId;
+                  const isOwner = currentUser?.id === msg.fromUserId;
+                  const isHovered = hoveredMessageId === msg.id;
+                  const isEditing = editingId === msg.id;
 
-              return (
-                <div key={msg.id}>
-                  {showDate && (
-                    <div className="relative my-[10px] flex items-center">
-                      <div className="flex-1 border-t border-[rgba(29,28,29,0.13)]" />
-                      <span className="flex-shrink-0 rounded-full border border-[rgba(29,28,29,0.13)] bg-white px-3 py-[2px] text-[13px] font-semibold text-[#1D1C1D]">
-                        {formatDateSeparator(msg.createdAt)}
-                      </span>
-                      <div className="flex-1 border-t border-[rgba(29,28,29,0.13)]" />
-                    </div>
-                  )}
-                  <div
-                    className={cn(
-                      'group relative flex px-0 hover:bg-[#F8F8F8]',
-                      showAvatar ? 'pt-4 pb-2' : 'py-0.5'
-                    )}
-                    onMouseEnter={() => {
-                      clearTimeout(hoverLeaveTimer.current);
-                      setHoveredMessageId(msg.id);
-                    }}
-                    onMouseLeave={() => {
-                      hoverLeaveTimer.current = setTimeout(() => {
-                        setHoveredMessageId(null);
-                        setShowMoreMenuId(null);
-                      }, 150);
-                    }}
-                  >
-                    <div className="w-9 flex-shrink-0 mr-2">
-                      {showAvatar ? (
-                        <Avatar
-                          src={msg.fromUser.avatar || undefined}
-                          alt={msg.fromUser.name}
-                          fallback={msg.fromUser.name}
-                          size="md"
-                          className="mt-[5px]"
-                        />
-                      ) : (
-                        <span className="hidden text-[12px] text-[#616061] group-hover:inline leading-[22px]">
-                          {format(msg.createdAt, 'h:mm')}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      {showAvatar && (
-                        <div className="flex items-baseline gap-2">
-                          <span className="text-[15px] font-black text-[#1D1C1D]">
-                            {msg.fromUser.name}
+                  return (
+                    <div key={msg.id}>
+                      {showDate && (
+                        <div className="relative my-[10px] flex items-center">
+                          <div className="flex-1 border-t border-[rgba(29,28,29,0.13)]" />
+                          <span className="flex-shrink-0 rounded-full border border-[rgba(29,28,29,0.13)] bg-white px-3 py-[2px] text-[13px] font-semibold text-[#1D1C1D]">
+                            {formatDateSeparator(msg.createdAt)}
                           </span>
-                          <span className="text-[12px] text-[#616061]">
-                            {format(msg.createdAt, 'h:mm a')}
-                          </span>
-                          {msg.editedAt && (
-                            <span className="text-[12px] text-[#616061]">(edited)</span>
-                          )}
+                          <div className="flex-1 border-t border-[rgba(29,28,29,0.13)]" />
                         </div>
                       )}
-                      {isEditing ? (
-                        <div className="mt-1">
-                          <textarea
-                            ref={editInputRef}
-                            data-testid="dm-edit-input"
-                            value={editContent}
-                            onChange={(e) => setEditContent(e.target.value)}
-                            onKeyDown={handleEditKeyDown}
-                            className="w-full rounded border border-[#1264A3] bg-white p-2 text-[15px] text-[#1D1C1D] leading-[22px] resize-none outline-none"
-                            rows={2}
-                          />
-                          <div className="mt-1 flex items-center gap-2 text-[12px]">
-                            <button
-                              onClick={handleCancelEdit}
-                              className="text-[#616061] hover:underline"
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              data-testid="dm-edit-save"
-                              onClick={handleSaveEdit}
-                              className="rounded bg-[#007a5a] px-3 py-1 text-white hover:bg-[#005e46]"
-                            >
-                              Save
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <p className="text-[15px] text-[#1D1C1D] leading-[22px] whitespace-pre-wrap break-words">
-                          {msg.content}
-                          {!showAvatar && msg.editedAt && (
-                            <span className="text-[12px] text-[#616061] ml-1">(edited)</span>
+                      <div
+                        className={cn(
+                          'group relative flex px-0 hover:bg-[#F8F8F8]',
+                          showAvatar ? 'pb-2 pt-4' : 'py-0.5',
+                        )}
+                        onMouseEnter={() => {
+                          clearTimeout(hoverLeaveTimer.current);
+                          setHoveredMessageId(msg.id);
+                        }}
+                        onMouseLeave={() => {
+                          hoverLeaveTimer.current = setTimeout(() => {
+                            setHoveredMessageId(null);
+                            setShowMoreMenuId(null);
+                          }, 150);
+                        }}
+                      >
+                        <div className="mr-2 w-9 flex-shrink-0">
+                          {showAvatar ? (
+                            <Avatar
+                              src={msg.fromUser.avatar || undefined}
+                              alt={msg.fromUser.name}
+                              fallback={msg.fromUser.name}
+                              size="md"
+                              className="mt-[5px]"
+                            />
+                          ) : (
+                            <span className="hidden text-[12px] leading-[22px] text-[#616061] group-hover:inline">
+                              {format(msg.createdAt, 'h:mm')}
+                            </span>
                           )}
-                        </p>
-                      )}
-                    </div>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          {showAvatar && (
+                            <div className="flex items-baseline gap-2">
+                              <span className="text-[15px] font-black text-[#1D1C1D]">
+                                {msg.fromUser.name}
+                              </span>
+                              <span className="text-[12px] text-[#616061]">
+                                {format(msg.createdAt, 'h:mm a')}
+                              </span>
+                              {msg.editedAt && (
+                                <span className="text-[12px] text-[#616061]">(edited)</span>
+                              )}
+                            </div>
+                          )}
+                          {isEditing ? (
+                            <div className="mt-1">
+                              <textarea
+                                ref={editInputRef}
+                                data-testid="dm-edit-input"
+                                value={editContent}
+                                onChange={(e) => setEditContent(e.target.value)}
+                                onKeyDown={handleEditKeyDown}
+                                className="w-full resize-none rounded border border-[#1264A3] bg-white p-2 text-[15px] leading-[22px] text-[#1D1C1D] outline-none"
+                                rows={2}
+                              />
+                              <div className="mt-1 flex items-center gap-2 text-[12px]">
+                                <button
+                                  onClick={handleCancelEdit}
+                                  className="text-[#616061] hover:underline"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  data-testid="dm-edit-save"
+                                  onClick={handleSaveEdit}
+                                  className="rounded bg-[#007a5a] px-3 py-1 text-white hover:bg-[#005e46]"
+                                >
+                                  Save
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="whitespace-pre-wrap break-words text-[15px] leading-[22px] text-[#1D1C1D]">
+                              {msg.content}
+                              {!showAvatar && msg.editedAt && (
+                                <span className="ml-1 text-[12px] text-[#616061]">(edited)</span>
+                              )}
+                            </p>
+                          )}
+                        </div>
 
-                    {/* Hover action toolbar */}
-                    {(isHovered || keepToolbarOpen(msg.id)) && !isEditing && (
-                      <div
-                        data-testid="dm-message-toolbar"
-                        className="absolute -top-4 right-2 flex items-center gap-0.5 rounded-lg border border-[#E0E0E0] bg-white p-0.5 shadow-sm"
-                      >
-                        <button
-                          data-testid="dm-emoji-btn"
-                          className="flex h-7 w-7 items-center justify-center rounded hover:bg-[#F8F8F8]"
-                          title="Add reaction"
-                          onClick={() =>
-                            setShowEmojiPickerId((prev) => (prev === msg.id ? null : msg.id))
-                          }
-                        >
-                          <Smile className="h-4 w-4 text-[#616061]" />
-                        </button>
-                        <button
-                          className="flex h-7 w-7 items-center justify-center rounded hover:bg-[#F8F8F8]"
-                          title="Reply in thread"
-                        >
-                          <MessageSquare className="h-4 w-4 text-[#616061]" />
-                        </button>
-                        <button
-                          data-testid="dm-more-btn"
-                          className="flex h-7 w-7 items-center justify-center rounded hover:bg-[#F8F8F8]"
-                          title="More actions"
-                          onClick={() =>
-                            setShowMoreMenuId((prev) => (prev === msg.id ? null : msg.id))
-                          }
-                        >
-                          <MoreHorizontal className="h-4 w-4 text-[#616061]" />
-                        </button>
-                      </div>
-                    )}
-
-                    {/* More actions dropdown */}
-                    {showMoreMenuId === msg.id && (
-                      <div
-                        data-testid="dm-more-menu"
-                        className="absolute -top-4 right-2 mt-9 z-50 w-48 rounded-lg border border-[#E0E0E0] bg-white py-1 shadow-lg"
-                      >
-                        {isOwner && (
-                          <>
+                        {/* Hover action toolbar */}
+                        {(isHovered || keepToolbarOpen(msg.id)) && !isEditing && (
+                          <div
+                            data-testid="dm-message-toolbar"
+                            className="absolute -top-4 right-2 flex items-center gap-0.5 rounded-lg border border-[#E0E0E0] bg-white p-0.5 shadow-sm"
+                          >
                             <button
-                              data-testid="dm-edit-btn"
-                              onClick={() => handleStartEdit(msg)}
-                              className="flex w-full items-center gap-2 px-4 py-1.5 text-[14px] text-[#1D1C1D] hover:bg-[#F8F8F8]"
+                              data-testid="dm-emoji-btn"
+                              className="flex h-7 w-7 items-center justify-center rounded hover:bg-[#F8F8F8]"
+                              title="Add reaction"
+                              onClick={() =>
+                                setShowEmojiPickerId((prev) =>
+                                  prev === msg.id ? null : msg.id,
+                                )
+                              }
                             >
-                              <Pencil className="h-4 w-4" />
-                              Edit message
+                              <Smile className="h-4 w-4 text-[#616061]" />
                             </button>
                             <button
-                              data-testid="dm-delete-btn"
-                              onClick={() => handleDelete(msg.id)}
-                              className="flex w-full items-center gap-2 px-4 py-1.5 text-[14px] text-red-600 hover:bg-[#F8F8F8]"
+                              className="flex h-7 w-7 items-center justify-center rounded hover:bg-[#F8F8F8]"
+                              title="Reply in thread"
                             >
-                              <Trash2 className="h-4 w-4" />
-                              Delete message
+                              <MessageSquare className="h-4 w-4 text-[#616061]" />
                             </button>
-                          </>
+                            <button
+                              data-testid="dm-more-btn"
+                              className="flex h-7 w-7 items-center justify-center rounded hover:bg-[#F8F8F8]"
+                              title="More actions"
+                              onClick={() =>
+                                setShowMoreMenuId((prev) =>
+                                  prev === msg.id ? null : msg.id,
+                                )
+                              }
+                            >
+                              <MoreHorizontal className="h-4 w-4 text-[#616061]" />
+                            </button>
+                          </div>
                         )}
-                        {!isOwner && (
-                          <div className="px-4 py-1.5 text-[13px] text-[#616061]">
-                            No actions available
+
+                        {/* More actions dropdown */}
+                        {showMoreMenuId === msg.id && (
+                          <div
+                            data-testid="dm-more-menu"
+                            className="absolute -top-4 right-2 z-50 mt-9 w-48 rounded-lg border border-[#E0E0E0] bg-white py-1 shadow-lg"
+                          >
+                            {isOwner && (
+                              <>
+                                <button
+                                  data-testid="dm-edit-btn"
+                                  onClick={() => handleStartEdit(msg)}
+                                  className="flex w-full items-center gap-2 px-4 py-1.5 text-[14px] text-[#1D1C1D] hover:bg-[#F8F8F8]"
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                  Edit message
+                                </button>
+                                <button
+                                  data-testid="dm-delete-btn"
+                                  onClick={() => handleDelete(msg.id)}
+                                  className="flex w-full items-center gap-2 px-4 py-1.5 text-[14px] text-red-600 hover:bg-[#F8F8F8]"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                  Delete message
+                                </button>
+                              </>
+                            )}
+                            {!isOwner && (
+                              <div className="px-4 py-1.5 text-[13px] text-[#616061]">
+                                No actions available
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Emoji picker */}
+                        {showEmojiPickerId === msg.id && (
+                          <div className="absolute -top-4 right-2 z-50 mt-9">
+                            <EmojiPicker
+                              onEmojiSelect={(_emoji) => {
+                                // Reactions on DMs not supported by backend yet
+                                setShowEmojiPickerId(null);
+                              }}
+                              onClickOutside={() => setShowEmojiPickerId(null)}
+                            />
                           </div>
                         )}
                       </div>
-                    )}
-
-                    {/* Emoji picker */}
-                    {showEmojiPickerId === msg.id && (
-                      <div className="absolute -top-4 right-2 mt-9 z-50">
-                        <EmojiPicker
-                          onEmojiSelect={(_emoji) => {
-                            // Reactions on DMs not supported by backend yet
-                            setShowEmojiPickerId(null);
-                          }}
-                          onClickOutside={() => setShowEmojiPickerId(null)}
-                        />
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-            <div ref={messagesEndRef} />
-          </>
-        )}
-      </div>
-
-      {/* Input */}
-      <div className="px-5 pb-6 pt-4 bg-white">
-        <div className="flex items-center gap-2 rounded-lg border border-[rgba(29,28,29,0.13)] px-3 py-2 focus-within:border-[#1264A3] focus-within:border-2">
-          <input
-            data-testid="dm-message-input"
-            type="text"
-            value={messageText}
-            onChange={(e) => setMessageText(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={`Message ${userName}`}
-            className="flex-1 text-[15px] text-[#1D1C1D] outline-none placeholder:text-[#616061]"
-          />
-          <button
-            onClick={handleSend}
-            disabled={!messageText.trim() || isSending}
-            className={cn(
-              'flex h-7 w-7 items-center justify-center rounded transition-colors',
-              messageText.trim()
-                ? 'bg-[#007a5a] text-white hover:bg-[#005e46]'
-                : 'text-gray-400'
+                    </div>
+                  );
+                })}
+                <div ref={messagesEndRef} />
+              </>
             )}
-          >
-            <SendHorizontal className="h-4 w-4" />
-          </button>
+          </div>
+
+          {/* Input */}
+          <div className="bg-white px-5 pb-6 pt-4">
+            <div className="flex items-center gap-2 rounded-lg border border-[rgba(29,28,29,0.13)] px-3 py-2 focus-within:border-2 focus-within:border-[#1264A3]">
+              <input
+                data-testid="dm-message-input"
+                type="text"
+                value={messageText}
+                onChange={(e) => setMessageText(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder={`Message ${userName}`}
+                className="flex-1 text-[15px] text-[#1D1C1D] outline-none placeholder:text-[#616061]"
+              />
+              <button
+                onClick={handleSend}
+                disabled={!messageText.trim() || isSending}
+                className={cn(
+                  'flex h-7 w-7 items-center justify-center rounded transition-colors',
+                  messageText.trim()
+                    ? 'bg-[#007a5a] text-white hover:bg-[#005e46]'
+                    : 'text-gray-400',
+                )}
+              >
+                <SendHorizontal className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
         </div>
+
+        {/* Pins Panel */}
+        {showPins && (
+          <div
+            data-testid="dm-pins-panel"
+            className="flex w-[300px] flex-col border-l border-[#E0E0E0] bg-white"
+          >
+            <div className="flex h-[49px] items-center justify-between border-b border-[#E0E0E0] px-4">
+              <div className="flex items-center gap-1.5">
+                <Pin className="h-4 w-4 text-[#616061]" />
+                <span className="text-[15px] font-bold text-[#1D1C1D]">Pinned messages</span>
+              </div>
+              <button
+                onClick={() => setShowPins(false)}
+                className="flex h-7 w-7 items-center justify-center rounded hover:bg-[#F8F8F8]"
+              >
+                <X className="h-4 w-4 text-[#616061]" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 text-center text-sm text-gray-500">
+              No pinned messages yet
+            </div>
+          </div>
+        )}
+
+        {/* Files Panel */}
+        {showFiles && (
+          <div
+            data-testid="dm-files-panel"
+            className="flex w-[300px] flex-col border-l border-[#E0E0E0] bg-white"
+          >
+            <div className="flex h-[49px] items-center justify-between border-b border-[#E0E0E0] px-4">
+              <div className="flex items-center gap-1.5">
+                <FileText className="h-4 w-4 text-[#616061]" />
+                <span className="text-[15px] font-bold text-[#1D1C1D]">Files</span>
+              </div>
+              <button
+                onClick={() => setShowFiles(false)}
+                className="flex h-7 w-7 items-center justify-center rounded hover:bg-[#F8F8F8]"
+              >
+                <X className="h-4 w-4 text-[#616061]" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 text-center text-sm text-gray-500">
+              No files shared yet
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
