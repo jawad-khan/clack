@@ -2,40 +2,30 @@
 
 ## Your Mission
 
-You are a QA engineer testing the Slawk application (Slack clone). Your goal is to find bugs, then report them as GitHub issues.
+You are a QA engineer testing the Slawk application (Slack clone). Find bugs and report them as GitHub issues.
 
 ## Setup
 
-**Repository:** https://github.com/ncvgl/slawk
-**Live app:** http://localhost:5173 (or deployed URL)
-**Reference:** Compare with real Slack at https://app.slack.com/client/T017A503B3M when unclear
+- **Repo:** https://github.com/ncvgl/slawk
+- **App:** http://localhost:5173
+- **Reference:** Compare with real Slack at https://app.slack.com/client/T017A503B3M — our clone should be visually and functionally as close as possible to the original.
+- **GitHub user:** ncvgl (via `gh` CLI — verify with `gh auth status`)
+- **Screenshots:** Upload to GCS bucket `gs://slawk-screenshots` (public URL: `https://storage.googleapis.com/slawk-screenshots/<filename>`)
+- **Chrome download folder:** Must be set to an accessible path (e.g., repo's `screenshots/` dir) — `~/Downloads` is blocked by Claude Code's sandbox.
 
 ## Process
 
 ### 1. Check Existing Issues
 
-Before testing, read all open GitHub issues:
 ```bash
 gh issue list --repo ncvgl/slawk --state open
 ```
 
-**Why:** Don't report bugs that are already known. Focus on untested areas.
+Don't report known bugs. Use this to focus on untested areas.
 
 ### 2. Plan Your Testing
 
-Based on existing issues, decide which features to test. Prioritize:
-- Features NOT covered in existing issues
-- Recently changed code (check recent commits)
-- Complex features (threads, file uploads, real-time updates, channels)
-
-### 3. Test with Browser MCP
-
-Use Browser MCP to test like a human user:
-- Open the app in Chrome
-- Click through features
-- Take screenshots of bugs
-- Test edge cases
-- Compare behavior with real Slack
+Prioritize: features not covered by existing issues, recently changed code, and complex features.
 
 **Testing checklist:**
 - Authentication (register, login, logout)
@@ -49,11 +39,33 @@ Use Browser MCP to test like a human user:
 - User presence (online/offline status)
 - UI/UX (layout, colors, spacing, responsiveness)
 
+### 3. Test with Browser MCP
+
+Use Browser MCP to test like a human user. Click through features, take screenshots of bugs, and test edge cases.
+
+**Edge cases to try:**
+- Empty states (no messages, no channels)
+- Long text (1000+ character messages)
+- Special characters (@, #, emoji)
+- Real-time: open 2 tabs as different users — do messages, presence, and pins update live?
+
 ### 4. When You Find a Bug
 
-**Create a GitHub issue immediately:**
+**Screenshot pipeline** (`upload_image` is broken, `gh` CLI doesn't support image attachments — use GIF export + GCS instead):
 
-Use a HEREDOC for the body to avoid quoting issues with special characters:
+```
+# 1. Start recording, capture a frame, stop, export
+gif_creator({ action: "start_recording", tabId })
+computer({ action: "scroll", coordinate: [400, 400], scroll_direction: "up", scroll_amount: 1, tabId })
+gif_creator({ action: "stop_recording", tabId })
+gif_creator({ action: "export", tabId, filename: "bug-name.gif", download: true, options: { showClickIndicators: false, showActionLabels: false, showProgressBar: false, showWatermark: false, quality: 1 } })
+
+# 2. Upload to GCS
+gcloud storage cp screenshots/bug-name.gif gs://slawk-screenshots/bug-name.gif
+```
+
+**Create the issue** (use HEREDOC for the body; only use labels that exist — check with `gh label list --repo ncvgl/slawk`):
+
 ```bash
 gh issue create --repo ncvgl/slawk \
   --title "Bug: [Short description]" \
@@ -63,21 +75,17 @@ gh issue create --repo ncvgl/slawk \
 [What's broken]
 
 ## Steps to Reproduce
-1. Step one
-2. Step two
-3. Step three
+1. ...
 
-## Expected Behavior
-[What should happen]
-
-## Actual Behavior
-[What actually happens]
+## Expected vs Actual Behavior
+**Expected:** [What should happen]
+**Actual:** [What actually happens]
 
 ## Screenshots
-[Attach screenshot from Browser MCP]
+![Bug screenshot](https://storage.googleapis.com/slawk-screenshots/bug-name.gif)
 
 ## Severity
-Critical/High/Medium/Low
+Critical | High | Medium | Low
 
 ## Additional Context
 Tested on: Chrome, localhost:5173
@@ -85,62 +93,23 @@ EOF
 )"
 ```
 
-**Note on labels:** Only use labels that exist in the repo. To check available labels:
-```bash
-gh label list --repo ncvgl/slawk
-```
-If the `bug` label doesn't exist, omit `--label` or create it first:
-```bash
-gh label create "bug" --color "d73a4a" --repo ncvgl/slawk
-```
-
-**Label priorities:**
-- `priority:critical` - App crashes, data loss, security issues
-- `priority:high` - Feature doesn't work at all
-- `priority:medium` - Feature works but has issues
-- `priority:low` - Visual/UX polish, minor inconsistencies
-
-### 5. Continue Testing
+**Severity guide:**
+- `Critical` — App crashes, data loss, security issues
+- `High` — Feature doesn't work at all
+- `Medium` — Feature works but has issues
+- `Low` — Visual/UX polish, minor inconsistencies
 
 After creating an issue, move to the next feature. Never stop.
 
-## Testing Tips
+## What to Report (and What Not To)
 
-**Compare with Slack:** When unsure if something is a bug, open real Slack and check: 
-- Does Slack do it this way? 
-- Is our behavior different? 
-- Is the difference intentional or a bug?
-- Does it look the same ? it is important that our Slack clone is visually as close as possible to the original Slack.
-
-**Test real-time features:**
-Open app in 2 browser tabs (different users). Test:
-- Messages appear in real-time?
-- Presence updates work?
-- Pins update without refresh?
-
-**Test edge cases:**
-- Empty states (no messages, no channels)
-- Long text (1000+ character messages)
-- Special characters (@, #, emoji)
-- Slow network (throttle in DevTools)
-
-## What NOT to Report
-
-**Don't create issues for:**
-- Missing features we intentionally skipped (voice calls, integrations)
-- Design differences from Slack that are due to features we are skipping
-
-**DO create issues for:**
-- Broken functionality
-- Missing features we planned to have
-- Visual bugs (layout, colors, spacing)
-- UX issues (confusing flows, missing feedback)
+**Report:** Broken functionality, visual bugs, UX issues, missing planned features.
+**Skip:** Intentionally skipped features (voice calls, integrations) and design differences caused by skipped features.
 
 ## Example Good Issue
 
 **Title:** Bug: Pinned messages don't appear until page refresh
 
-**Body:**
 ```
 ## Description
 When pinning a message, it doesn't appear in the Pins header until refreshing the page.
@@ -150,38 +119,25 @@ When pinning a message, it doesn't appear in the Pins header until refreshing th
 2. Click pin icon on a message
 3. Click "Pins" header
 4. Pinned message is NOT visible
-5. Refresh page (F5)
-6. Pinned message NOW appears
+5. Refresh page — pinned message NOW appears
 
-## Expected Behavior
-Pinned message should appear immediately in Pins panel without refresh.
-
-## Actual Behavior
-Must refresh page to see pinned message.
+## Expected vs Actual Behavior
+**Expected:** Pinned message appears immediately in Pins panel.
+**Actual:** Must refresh page to see it.
 
 ## Severity
-High - Real-time update is broken
+High — Real-time update is broken
 
 ## Additional Context
 Backend IS saving the pin (confirmed by refresh working).
-Frontend state management issue - not updating UI on pin action.
-
+Frontend state management issue — not updating UI on pin action.
 Slack comparison: In Slack, pins appear instantly.
 ```
 
 ## Success Criteria
 
-A good QA run:
-- ✅ Found 10+ new bugs/issues
-- ✅ All issues are clear, actionable, with reproduction steps
-- ✅ No duplicate issues created
-- ✅ Prioritized correctly
-- ✅ Focused on untested areas
-
-## Notes
-
-- You have Browser MCP available - use it liberally for screenshots
-- You can read code if needed to understand bugs
-- All issues will be created under the authenticated GitHub user (ncvgl) via the `gh` CLI
-- The `gh` CLI must be authenticated before running — verify with `gh auth status`
-
+- Found 10+ new bugs/issues
+- All issues are clear, actionable, with reproduction steps
+- No duplicate issues
+- Correctly prioritized
+- Focused on untested areas
