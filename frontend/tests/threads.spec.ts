@@ -32,10 +32,11 @@ test.describe('Threads', () => {
     // Thread panel should show the parent message
     await expect(threadPanel.getByText(uniqueText)).toBeVisible();
 
-    // Type a reply in the thread input
-    const threadInput = threadPanel.locator('[data-testid="thread-reply-input"]');
-    await threadInput.fill('This is a reply');
-    await threadInput.press('Enter');
+    // Type a reply in the thread Quill editor
+    const threadEditor = threadPanel.locator('.ql-editor');
+    await threadEditor.click();
+    await page.keyboard.type('This is a reply', { delay: 10 });
+    await page.keyboard.press('Enter');
 
     // Reply should appear in the thread panel
     await expect(threadPanel.getByText('This is a reply')).toBeVisible({ timeout: 5000 });
@@ -67,13 +68,15 @@ test.describe('Threads', () => {
     await expect(threadPanel).toBeVisible({ timeout: 5000 });
 
     // Send two replies
-    const threadInput = threadPanel.locator('[data-testid="thread-reply-input"]');
-    await threadInput.fill('Reply one');
-    await threadInput.press('Enter');
+    const threadEditor = threadPanel.locator('.ql-editor');
+    await threadEditor.click();
+    await page.keyboard.type('Reply one', { delay: 10 });
+    await page.keyboard.press('Enter');
     await expect(threadPanel.getByText('Reply one')).toBeVisible({ timeout: 5000 });
 
-    await threadInput.fill('Reply two');
-    await threadInput.press('Enter');
+    await threadEditor.click();
+    await page.keyboard.type('Reply two', { delay: 10 });
+    await page.keyboard.press('Enter');
     await expect(threadPanel.getByText('Reply two')).toBeVisible({ timeout: 5000 });
 
     // Should show "2 replies" on the parent message

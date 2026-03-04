@@ -44,10 +44,11 @@ test.describe('Markdown rendering in thread panel, pins, and search', () => {
     await expect(threadPanel.getByText('`code`', { exact: false })).not.toBeVisible();
 
     // Send a reply with markdown too
-    const threadInput = threadPanel.locator('[data-testid="thread-reply-input"]');
+    const threadEditor = threadPanel.locator('.ql-editor');
     const replyText = `Reply **strong** \`snippet\``;
-    await threadInput.fill(replyText);
-    await threadInput.press('Enter');
+    await threadEditor.click();
+    await page.keyboard.type(replyText, { delay: 10 });
+    await page.keyboard.press('Enter');
 
     // Wait for the reply to appear
     await expect(threadPanel.locator('strong').filter({ hasText: 'strong' })).toBeVisible({ timeout: 5000 });

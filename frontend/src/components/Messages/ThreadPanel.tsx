@@ -1,11 +1,18 @@
-import { useState, useEffect, useRef } from 'react';
-import { X, SendHorizontal } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { X, SendHorizontal, Plus, Smile, AtSign } from 'lucide-react';
 import { format } from 'date-fns';
+import Quill from 'quill';
+import 'quill/dist/quill.snow.css';
 import { Avatar } from '@/components/ui/avatar';
-import { getThread, replyToMessage, type ApiMessage } from '@/lib/api';
+import { getThread, replyToMessage, uploadFile, getUsers, type ApiMessage, type ApiFile, type AuthUser } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { renderMessageContent } from '@/lib/renderMessageContent';
 import { Button } from '@/components/ui/button';
+import { FormatToolbar } from './FormatToolbar';
+import { FilePreview } from './FilePreview';
+import { MentionDropdown } from './MentionDropdown';
+import { EmojiPicker } from '@/components/ui/emoji-picker';
+import { LinkModal } from './LinkModal';
 
 interface ThreadPanelProps {
   messageId: number;
@@ -26,10 +33,27 @@ export function ThreadPanel({ messageId, onClose, onReplyCountChange }: ThreadPa
   const [replies, setReplies] = useState<ThreadMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [replyText, setReplyText] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [replyError, setReplyError] = useState<string | null>(null);
+  const [canSend, setCanSend] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<ApiFile[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [showMentionDropdown, setShowMentionDropdown] = useState(false);
+  const [mentionUsers, setMentionUsers] = useState<AuthUser[]>([]);
+  const [mentionQuery, setMentionQuery] = useState('');
+  const [mentionStartIndex, setMentionStartIndex] = useState<number | null>(null);
+  const [mentionSelectedIndex, setMentionSelectedIndex] = useState(0);
+  const [showLinkModal, setShowLinkModal] = useState(false);
+  const [linkUrl, setLinkUrl] = useState('');
+  const [linkText, setLinkText] = useState('');
+  const linkSavedRangeRef = useRef<{ index: number; length: number } | null>(null);
+  const mentionDropdownRef = useRef<HTMLDivElement>(null);
   const repliesEndRef = useRef<HTMLDivElement>(null);
+  const editorRef = useRef<HTMLDivElement>(null);
+  const quillRef = useRef<Quill | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const transformMessage = (msg: ApiMessage): ThreadMessage => ({
     id: msg.id,
@@ -66,17 +90,83 @@ export function ThreadPanel({ messageId, onClose, onReplyCountChange }: ThreadPa
     repliesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [replies]);
 
-  const handleSendReply = async () => {
-    const text = replyText.trim();
-    if (!text || isSending) return;
+  const serializeDelta = useCallback((quill: Quill): string => {
+    const delta = quill.getContents();
+    let result = '';
+    let inCodeBlock = false;
+    let codeBlockLines: string[] = [];
+    let pendingText = '';
+
+    const flushCodeBlock = () => {
+      result += '```\n' + codeBlockLines.join('\n') + '\n```';
+      codeBlockLines = [];
+      inCodeBlock = false;
+    };
+
+    for (const op of delta.ops) {
+      if (typeof op.insert !== 'string') continue;
+      const attrs = op.attributes || {};
+      const text = op.insert;
+
+      if (attrs['code-block']) {
+        if (!inCodeBlock) inCodeBlock = true;
+        codeBlockLines.push(pendingText);
+        pendingText = '';
+      } else {
+        if (pendingText) {
+          if (inCodeBlock) flushCodeBlock();
+          result += pendingText;
+          pendingText = '';
+        }
+        if (inCodeBlock) flushCodeBlock();
+
+        if (attrs['blockquote']) {
+          const lines = text.split('\n');
+          for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            if (i < lines.length - 1) {
+              result += '> ' + line + '\n';
+            } else if (line !== '') {
+              result += '> ' + line;
+            }
+          }
+        } else if (attrs['code']) {
+          result += '`' + text + '`';
+        } else {
+          if (text.endsWith('\n') || text === '\n') {
+            result += text;
+          } else {
+            pendingText = text;
+          }
+        }
+      }
+    }
+
+    if (pendingText) {
+      if (inCodeBlock) flushCodeBlock();
+      result += pendingText;
+    }
+    if (inCodeBlock) flushCodeBlock();
+
+    return result.trim();
+  }, []);
+
+  const handleSendReply = useCallback(async () => {
+    const quill = quillRef.current;
+    if (!quill) return;
+    const text = serializeDelta(quill);
+    if (!text && pendingFiles.length === 0) return;
+    const content = text || ' ';
 
     setIsSending(true);
     setReplyError(null);
     try {
-      const apiReply = await replyToMessage(messageId, text);
+      const apiReply = await replyToMessage(messageId, content);
       const reply = transformMessage(apiReply);
       setReplies((prev) => [...prev, reply]);
-      setReplyText('');
+      quill.setText('');
+      setPendingFiles([]);
+      setCanSend(false);
       onReplyCountChange?.(messageId, replies.length + 1);
     } catch (err) {
       console.error('Failed to send reply:', err);
@@ -84,14 +174,214 @@ export function ThreadPanel({ messageId, onClose, onReplyCountChange }: ThreadPa
     } finally {
       setIsSending(false);
     }
+  }, [messageId, onReplyCountChange, replies.length, pendingFiles, serializeDelta]);
+
+  const handleSendRef = useRef(handleSendReply);
+  handleSendRef.current = handleSendReply;
+  const mentionActiveRef = useRef(false);
+  mentionActiveRef.current = showMentionDropdown;
+
+  useEffect(() => {
+    if (!editorRef.current || quillRef.current) return;
+
+    const quill = new Quill(editorRef.current, {
+      theme: 'snow',
+      modules: {
+        toolbar: false,
+        keyboard: {
+          bindings: {
+            enter: {
+              key: 'Enter',
+              handler: () => {
+                if (mentionActiveRef.current) return true;
+                handleSendRef.current();
+                return false;
+              },
+            },
+            escape: {
+              key: 'Escape',
+              handler: () => {
+                if (mentionActiveRef.current) {
+                  setShowMentionDropdown(false);
+                  return false;
+                }
+                return true;
+              },
+            },
+          },
+        },
+      },
+      placeholder: 'Reply...',
+    });
+
+    quill.on('text-change', () => {
+      setCanSend(quill.getText().trim().length > 0);
+      setReplyError(null);
+      const selection = quill.getSelection();
+      if (!selection) return;
+      const cursorPos = selection.index;
+      const fullText = quill.getText(0, cursorPos);
+      const atIndex = fullText.lastIndexOf('@');
+      if (atIndex >= 0) {
+        const beforeAt = atIndex > 0 ? fullText[atIndex - 1] : ' ';
+        const query = fullText.slice(atIndex + 1);
+        if ((atIndex === 0 || /\s/.test(beforeAt)) && !/\s/.test(query)) {
+          setMentionStartIndex(atIndex);
+          setMentionQuery(query);
+          setShowMentionDropdown(true);
+          setMentionSelectedIndex(0);
+          return;
+        }
+      }
+      setShowMentionDropdown(false);
+    });
+
+    quillRef.current = quill;
+  }, []);
+
+  const handleEmojiSelect = useCallback((emoji: { native: string }) => {
+    const quill = quillRef.current;
+    if (!quill) return;
+    const range = quill.getSelection(true);
+    quill.insertText(range.index, emoji.native);
+    quill.setSelection(range.index + emoji.native.length);
+    setShowEmojiPicker(false);
+    quill.focus();
+  }, []);
+
+  useEffect(() => {
+    if (!showMentionDropdown) {
+      setMentionUsers([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const users = await getUsers(mentionQuery || undefined);
+        if (!cancelled) setMentionUsers(users);
+      } catch {
+        // ignore
+      }
+    }, 150);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [showMentionDropdown, mentionQuery]);
+
+  const insertMention = useCallback(
+    (user: AuthUser) => {
+      const quill = quillRef.current;
+      if (!quill || mentionStartIndex === null) return;
+      const mentionText = `@${user.name}`;
+      const deleteLength = mentionQuery.length + 1;
+      quill.deleteText(mentionStartIndex, deleteLength);
+      quill.insertText(mentionStartIndex, mentionText + ' ');
+      quill.setSelection(mentionStartIndex + mentionText.length + 1);
+      setShowMentionDropdown(false);
+      setMentionQuery('');
+      setMentionStartIndex(null);
+      quill.focus();
+    },
+    [mentionStartIndex, mentionQuery],
+  );
+
+  const handleMentionButtonClick = () => {
+    const quill = quillRef.current;
+    if (!quill) return;
+    const range = quill.getSelection(true);
+    quill.insertText(range.index, '@');
+    quill.setSelection(range.index + 1);
+    quill.focus();
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSendReply();
+  const handleLinkSave = useCallback(() => {
+    const quill = quillRef.current;
+    const range = linkSavedRangeRef.current;
+    if (!quill || !linkUrl.trim()) {
+      setShowLinkModal(false);
+      return;
+    }
+    const url = linkUrl.trim().startsWith('http') ? linkUrl.trim() : `https://${linkUrl.trim()}`;
+    if (range && range.length > 0) {
+      quill.formatText(range.index, range.length, 'link', url);
+    } else {
+      const insertText = linkText.trim() || url;
+      const insertAt = range ? range.index : quill.getLength() - 1;
+      quill.insertText(insertAt, insertText, 'link', url);
+      quill.setSelection(insertAt + insertText.length);
+    }
+    setShowLinkModal(false);
+    setLinkUrl('');
+    setLinkText('');
+    linkSavedRangeRef.current = null;
+    quill.focus();
+  }, [linkUrl, linkText]);
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setIsUploading(true);
+    setUploadError(null);
+    try {
+      for (const file of Array.from(files)) {
+        const uploaded = await uploadFile(file);
+        setPendingFiles((prev) => [...prev, uploaded]);
+      }
+    } catch {
+      setUploadError('Failed to upload file. Please try again.');
+      setTimeout(() => setUploadError(null), 4000);
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
+
+  const removePendingFile = (fileId: number) => {
+    setPendingFiles((prev) => prev.filter((f) => f.id !== fileId));
+  };
+
+  const applyFormat = (format: string, value?: string) => {
+    const quill = quillRef.current;
+    if (!quill) return;
+
+    if (format === 'link') {
+      const range = quill.getSelection();
+      if (range) {
+        const currentFormat = quill.getFormat(range);
+        if (currentFormat.link) {
+          quill.format('link', false);
+        } else {
+          linkSavedRangeRef.current = { index: range.index, length: range.length };
+          const selectedText = range.length > 0 ? quill.getText(range.index, range.length) : '';
+          setLinkText(selectedText);
+          setLinkUrl('');
+          setShowLinkModal(true);
+        }
+      }
+      return;
+    }
+
+    if (value) {
+      const range = quill.getSelection();
+      if (range) {
+        const currentFormat = quill.getFormat(range);
+        quill.format(format, currentFormat[format] === value ? false : value);
+      }
+    } else {
+      const range = quill.getSelection();
+      if (range) {
+        const currentFormat = quill.getFormat(range);
+        quill.format(format, !currentFormat[format]);
+      }
+    }
+    quill.focus();
+  };
+
+  const hasContent = canSend || pendingFiles.length > 0;
 
   return (
     <div
@@ -180,33 +470,115 @@ export function ThreadPanel({ messageId, onClose, onReplyCountChange }: ThreadPa
       </div>
 
       {/* Reply input */}
-      <div className="border-t border-slack-border px-4 py-3">
+      <div className="relative border-t border-slack-border px-4 py-3">
         {replyError && (
           <p data-testid="thread-reply-error" className="mb-2 text-xs text-slack-error">{replyError}</p>
         )}
-        <div className="flex items-center gap-2 rounded-lg border border-slack-border-light px-3 py-2 focus-within:border-slack-link">
+        {uploadError && (
+          <p className="mb-2 text-xs text-slack-error">{uploadError}</p>
+        )}
+        <div data-testid="thread-reply-input" className="slawk-editor rounded-[8px] border border-slack-border-light">
+          {/* Formatting Toolbar */}
+          <FormatToolbar onApplyFormat={applyFormat} />
+
+          {/* File preview area */}
+          <FilePreview files={pendingFiles} onRemove={removePendingFile} />
+
+          {/* Upload progress indicator */}
+          {isUploading && (
+            <div className="px-3 py-1 text-xs text-slack-hint">Uploading...</div>
+          )}
+
+          {/* Quill Editor */}
+          <div ref={editorRef} />
+
+          {/* Mention Dropdown */}
+          {showMentionDropdown && (
+            <MentionDropdown
+              ref={mentionDropdownRef}
+              users={mentionUsers}
+              selectedIndex={mentionSelectedIndex}
+              onSelect={insertMention}
+            />
+          )}
+
+          {/* Emoji Picker */}
+          {showEmojiPicker && (
+            <div className="absolute bottom-full left-0 mb-2 z-50">
+              <EmojiPicker
+                onEmojiSelect={handleEmojiSelect}
+                onClickOutside={() => setShowEmojiPicker(false)}
+              />
+            </div>
+          )}
+
+          {/* Hidden file input */}
           <input
-            data-testid="thread-reply-input"
-            type="text"
-            value={replyText}
-            onChange={(e) => { setReplyText(e.target.value); setReplyError(null); }}
-            onKeyDown={handleKeyDown}
-            placeholder="Reply..."
-            className="flex-1 text-[14px] text-slack-primary outline-none placeholder:text-slack-secondary"
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            accept="image/*,.pdf,.txt,.json,.zip"
+            onChange={handleFileSelect}
           />
-          <button
-            onClick={handleSendReply}
-            disabled={!replyText.trim() || isSending}
-            className={cn(
-              'flex h-7 w-7 items-center justify-center rounded transition-colors',
-              replyText.trim()
-                ? 'bg-slack-btn text-white hover:bg-slack-btn-hover'
-                : 'text-slack-disabled'
-            )}
-          >
-            <SendHorizontal className="h-4 w-4" />
-          </button>
+
+          {/* Bottom Toolbar */}
+          <div className="flex items-center justify-between px-[6px] py-1">
+            <div className="flex items-center">
+              <Button
+                data-testid="thread-attach-file-button"
+                variant="toolbar"
+                size="icon-sm"
+                onClick={() => fileInputRef.current?.click()}
+                title="Attach file"
+              >
+                <Plus className="h-[18px] w-[18px]" />
+              </Button>
+              <Button
+                variant="toolbar"
+                size="icon-sm"
+                onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                title="Emoji"
+              >
+                <Smile className="h-[18px] w-[18px]" />
+              </Button>
+              <Button
+                data-testid="thread-mention-button"
+                variant="toolbar"
+                size="icon-sm"
+                onClick={handleMentionButtonClick}
+                title="Mention someone"
+              >
+                <AtSign className="h-[18px] w-[18px]" />
+              </Button>
+            </div>
+
+            <button
+              data-testid="thread-send-button"
+              onClick={() => handleSendRef.current()}
+              disabled={!hasContent || isSending}
+              className={cn(
+                'flex h-7 w-7 items-center justify-center rounded transition-colors',
+                hasContent
+                  ? 'bg-slack-btn text-white hover:bg-slack-btn-hover'
+                  : 'text-slack-disabled',
+              )}
+            >
+              <SendHorizontal className="h-4 w-4" />
+            </button>
+          </div>
         </div>
+
+        {/* Link Modal */}
+        {showLinkModal && (
+          <LinkModal
+            linkUrl={linkUrl}
+            linkText={linkText}
+            onLinkUrlChange={setLinkUrl}
+            onLinkTextChange={setLinkText}
+            onSave={handleLinkSave}
+            onClose={() => setShowLinkModal(false)}
+          />
+        )}
       </div>
     </div>
   );
