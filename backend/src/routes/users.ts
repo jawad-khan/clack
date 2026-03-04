@@ -134,7 +134,6 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
       where,
       select: {
         id: true,
-        email: true,
         name: true,
         avatar: true,
         status: true,
