@@ -65,4 +65,42 @@ test.describe('File Uploads', () => {
     await expect(fileAttachment).toBeVisible({ timeout: 10000 });
     await expect(fileAttachment.locator('img')).toBeVisible({ timeout: 5000 });
   });
+
+  test('image upload shows filename, size, and download button (#29)', async ({ page }) => {
+    const email = uniqueEmail();
+    await register(page, 'ImgMetaUser', email, 'password123');
+
+    await clickChannel(page, 'general');
+    await page.waitForTimeout(500);
+
+    const attachButton = page.getByTestId('attach-file-button');
+    const [fileChooser] = await Promise.all([
+      page.waitForEvent('filechooser'),
+      attachButton.click(),
+    ]);
+    await fileChooser.setFiles(TEST_IMAGE_PATH);
+    await expect(page.getByTestId('file-preview')).toBeVisible({ timeout: 5000 });
+
+    const uniqueText = `Img meta ${Date.now()}`;
+    const editor = page.locator('.ql-editor');
+    await editor.click();
+    await page.keyboard.type(uniqueText, { delay: 10 });
+    await page.keyboard.press('Enter');
+
+    const messageRow = page.locator('.group.relative.flex.px-5').filter({ hasText: uniqueText });
+    await expect(messageRow.first()).toBeVisible({ timeout: 10000 });
+
+    const fileAttachment = messageRow.first().locator('[data-testid="message-file"]');
+    await expect(fileAttachment).toBeVisible({ timeout: 10000 });
+
+    // Image should have filename displayed
+    await expect(fileAttachment.getByTestId('image-filename')).toBeVisible();
+    await expect(fileAttachment.getByTestId('image-filename')).toHaveText(/test-image\.png/);
+
+    // Image should have file size displayed
+    await expect(fileAttachment.getByTestId('image-filesize')).toBeVisible();
+
+    // Image should have a download button
+    await expect(fileAttachment.getByTestId('image-download')).toBeVisible();
+  });
 });

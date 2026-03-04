@@ -155,17 +155,36 @@ export function Message({ message, showAvatar, isCompact, onOpenThread }: Messag
                 className="rounded-lg border border-slack-border overflow-hidden"
               >
                 {file.mimetype.startsWith('image/') ? (
-                  <button
-                    data-testid="image-thumbnail"
-                    onClick={() => { setLightboxSrc(file.url); setLightboxAlt(file.originalName); }}
-                    className="block cursor-zoom-in focus:outline-none"
-                  >
-                    <img
-                      src={file.url}
-                      alt={file.originalName}
-                      className="max-h-[200px] max-w-[300px] object-contain"
-                    />
-                  </button>
+                  <div>
+                    <button
+                      data-testid="image-thumbnail"
+                      onClick={() => { setLightboxSrc(file.url); setLightboxAlt(file.originalName); }}
+                      className="block cursor-zoom-in focus:outline-none"
+                    >
+                      <img
+                        src={file.url}
+                        alt={file.originalName}
+                        className="max-h-[200px] max-w-[300px] object-contain"
+                      />
+                    </button>
+                    <div className="flex items-center gap-2 px-3 py-1.5 border-t border-slack-border">
+                      <span data-testid="image-filename" className="text-[13px] text-slack-link truncate max-w-[200px]">
+                        {file.originalName}
+                      </span>
+                      <span data-testid="image-filesize" className="text-[11px] text-slack-disabled flex-shrink-0">
+                        {formatFileSize(file.size)}
+                      </span>
+                      <a
+                        data-testid="image-download"
+                        href={file.url}
+                        download={file.originalName}
+                        className="ml-auto flex-shrink-0 text-slack-disabled hover:text-slack-primary"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Download className="h-4 w-4" />
+                      </a>
+                    </div>
+                  </div>
                 ) : (
                   <a
                     href={file.url}
