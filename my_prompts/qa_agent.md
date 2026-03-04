@@ -88,8 +88,9 @@ gcloud storage cp screenshots/bug-name.gif gs://slawk-screenshots/bug-name.gif
 
 ```bash
 gh issue create --repo ncvgl/slawk \
-  --title "Bug: [Short description]" \
-  --label "bug" \
+  --title "Bug: [Short description]" \          # or "Feature: [Short description]"
+  --label "bug" --label "priority:<severity>" \          # for broken functionality
+  # OR: --label "enhancement" --label "priority:<severity>" \  # for missing features
   --body "$(cat <<'EOF'
 ## Description
 [What's broken]
@@ -113,17 +114,20 @@ EOF
 )"
 ```
 
-**Severity guide:**
-- `Critical` — App crashes, data loss, security issues
-- `High` — Feature doesn't work at all
-- `Medium` — Feature works but has issues
-- `Low` — Visual/UX polish, minor inconsistencies
+**Severity labels** (always add one alongside `bug`):
+- `priority:critical` — App crashes, data loss, security issues
+- `priority:high` — Feature doesn't work at all
+- `priority:medium` — Feature works but has issues
+- `priority:low` — Visual/UX polish, minor inconsistencies
 
 After the issue is created, resume testing the next feature. Never stop testing.
 
 ## What to Report (and What Not To)
 
-**Report:** Broken functionality, visual bugs, UX issues, missing planned features.
+**Report:**
+- `bug` — Something that exists but is broken (wrong color, silent error, broken rendering)
+- `enhancement` — Something that doesn't exist yet but should (missing UI element, unimplemented button)
+
 **Skip:** Intentionally skipped features (voice calls, integrations) and design differences caused by skipped features.
 
 ## Example Good Issue
