@@ -91,6 +91,30 @@ router.post('/', authMiddleware, upload.single('file'), async (req: AuthRequest,
       return;
     }
 
+    // Validate actual file content via magic bytes, not just client Content-Type
+    const { fileTypeFromFile } = await import('file-type');
+    const detectedType = await fileTypeFromFile(file.path);
+    const allowedMimesByMagic = new Set([
+      'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+      'application/pdf', 'application/zip',
+    ]);
+    // Text/JSON files have no magic bytes — allow if client claimed text/plain or application/json
+    const textTypes = new Set(['text/plain', 'application/json']);
+    if (detectedType) {
+      if (!allowedMimesByMagic.has(detectedType.mime)) {
+        fs.unlinkSync(file.path);
+        res.status(400).json({ error: 'File content does not match an allowed type' });
+        return;
+      }
+      // Override client-provided mimetype with detected one
+      file.mimetype = detectedType.mime;
+    } else if (!textTypes.has(file.mimetype)) {
+      // No magic bytes detected and not a text type — reject
+      fs.unlinkSync(file.path);
+      res.status(400).json({ error: 'File content does not match an allowed type' });
+      return;
+    }
+
     const messageId = req.body?.messageId ? parseInt(req.body.messageId) : undefined;
 
     // If messageId is provided, verify user has access to the channel
