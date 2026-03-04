@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useChannelActions } from '@/hooks/useChannelActions';
 import { Button } from '@/components/ui/button';
+import { Avatar } from '@/components/ui/avatar';
 import type { AuthUser } from '@/lib/api';
 
 interface AddTeammatesDialogProps {
@@ -54,9 +55,12 @@ export function AddTeammatesDialog({
                 onClick={() => onSelectUser(u)}
                 className="flex w-full items-center gap-3 rounded px-3 py-2 hover:bg-slack-hover text-left"
               >
-                <div className="flex h-8 w-8 items-center justify-center rounded bg-slack-purple text-white text-sm font-medium">
-                  {u.name.charAt(0).toUpperCase()}
-                </div>
+                <Avatar
+                  src={u.avatar ?? undefined}
+                  alt={u.name}
+                  fallback={u.name}
+                  size="md"
+                />
                 <div>
                   <p className="text-[14px] font-medium text-slack-primary">{u.name}</p>
                 </div>
