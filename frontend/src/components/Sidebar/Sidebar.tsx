@@ -44,7 +44,9 @@ export function Sidebar() {
   const [showAddChannelDialog, setShowAddChannelDialog] = useState(false);
   const [browseChannels, setBrowseChannels] = useState<Channel[]>([]);
   const [showAddTeammates, setShowAddTeammates] = useState(false);
+  const [showWorkspaceMenu, setShowWorkspaceMenu] = useState(false);
   const avatarMenuRef = useRef<HTMLDivElement>(null);
+  const workspaceMenuRef = useRef<HTMLDivElement>(null);
 
   // Close avatar menu when clicking outside
   useEffect(() => {
@@ -58,6 +60,19 @@ export function Sidebar() {
       return () => document.removeEventListener('mousedown', handleClick);
     }
   }, [showAvatarMenu]);
+
+  // Close workspace menu when clicking outside
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (workspaceMenuRef.current && !workspaceMenuRef.current.contains(e.target as Node)) {
+        setShowWorkspaceMenu(false);
+      }
+    }
+    if (showWorkspaceMenu) {
+      document.addEventListener('mousedown', handleClick);
+      return () => document.removeEventListener('mousedown', handleClick);
+    }
+  }, [showWorkspaceMenu]);
 
   const handleOpenAddChannel = () => {
     setShowAddChannelDialog(true);
@@ -196,10 +211,32 @@ export function Sidebar() {
       <div data-testid="sidebar" className="flex w-[260px] flex-col bg-slack-sidebar text-white/70">
         {/* Workspace Header - 44px height, 6px 16px padding */}
         <div className="flex h-[44px] items-center justify-between border-b border-white/10 px-4 py-[6px]">
-          <button className="flex items-center gap-1 font-bold text-white hover:bg-slack-sidebar-hover rounded px-2 py-1 -ml-2">
-            <span className="text-[18px] font-bold">Slawk</span>
-            <ChevronDown className="h-4 w-4" />
-          </button>
+          <div className="relative" ref={workspaceMenuRef}>
+            <button
+              data-testid="workspace-menu-button"
+              onClick={() => setShowWorkspaceMenu((v) => !v)}
+              className="flex items-center gap-1 font-bold text-white hover:bg-slack-sidebar-hover rounded px-2 py-1 -ml-2"
+            >
+              <span className="text-[18px] font-bold">Slawk</span>
+              <ChevronDown className="h-4 w-4" />
+            </button>
+            {showWorkspaceMenu && (
+              <div data-testid="workspace-dropdown" className="absolute left-0 top-9 z-50 min-w-[200px] rounded-lg border border-slack-border bg-white shadow-lg py-1">
+                <div className="px-4 py-2 border-b border-slack-border-light">
+                  <p className="text-sm font-bold text-slack-primary">Slawk</p>
+                  <p className="text-xs text-slack-hint">slawk.dev</p>
+                </div>
+                <Button variant="menu-item" onClick={() => { setShowWorkspaceMenu(false); openProfile(); }}>
+                  <User className="h-4 w-4" />
+                  Profile
+                </Button>
+                <Button variant="menu-item" onClick={() => { setShowWorkspaceMenu(false); logout(); }}>
+                  <LogOut className="h-4 w-4" />
+                  Sign out
+                </Button>
+              </div>
+            )}
+          </div>
           <button onClick={handleOpenAddTeammates} className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20">
             <SquarePen className="h-4 w-4" />
           </button>
