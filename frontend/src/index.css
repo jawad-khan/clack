@@ -177,13 +177,13 @@ body {
 
 .slawk-editor .ql-editor pre.ql-syntax,
 .slawk-editor .ql-editor .ql-code-block-container {
-  background: var(--color-slack-hover);
+  background: var(--color-slack-hover) !important;
+  color: var(--color-slack-primary) !important;
   border: 1px solid var(--color-slack-border);
   border-radius: 4px;
   padding: 8px 12px;
   font-family: Monaco, Menlo, Consolas, monospace;
   font-size: 13px;
-  color: var(--color-slack-primary);
   margin: 4px 0;
 }
 
