@@ -55,6 +55,7 @@ export interface Message {
   files: MessageFile[];
   threadCount: number;
   threadLastReplyAt?: Date;
+  threadParticipants?: { id: number; name: string; avatar: string | null }[];
   isEdited?: boolean;
   isPinned?: boolean;
 }

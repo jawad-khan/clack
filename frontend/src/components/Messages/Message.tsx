@@ -204,22 +204,31 @@ export function Message({ message, showAvatar, isCompact, onOpenThread }: Messag
           >
             {/* Mini avatar stack */}
             <div data-testid="thread-avatars" className="flex -space-x-1">
-              <Avatar
-                src={message.user.avatar ?? undefined}
-                alt={message.user.name}
-                fallback={message.user.name}
-                size="sm"
-                className="border border-white"
-              />
-              {message.threadCount > 1 && (
-                <Avatar
-                  src={undefined}
-                  alt="Thread participant"
-                  fallback="?"
-                  size="sm"
-                  className="border border-white"
-                />
-              )}
+              {(() => {
+                // Collect unique participants: message author + thread participants
+                const seen = new Set<number>();
+                const participants: { id: number; name: string; avatar: string | null }[] = [];
+                // Add message author first
+                seen.add(message.user.id);
+                participants.push({ id: message.user.id, name: message.user.name, avatar: message.user.avatar });
+                // Add thread participants (reply authors)
+                for (const p of message.threadParticipants ?? []) {
+                  if (!seen.has(p.id)) {
+                    seen.add(p.id);
+                    participants.push(p);
+                  }
+                }
+                return participants.slice(0, 3).map((p) => (
+                  <Avatar
+                    key={p.id}
+                    src={p.avatar ?? undefined}
+                    alt={p.name}
+                    fallback={p.name}
+                    size="sm"
+                    className="border border-white"
+                  />
+                ));
+              })()}
             </div>
             <span className="font-normal">
               {message.threadCount} {message.threadCount === 1 ? 'reply' : 'replies'}

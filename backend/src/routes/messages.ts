@@ -152,6 +152,15 @@ router.get('/:id/messages', authMiddleware, async (req: AuthRequest, res: Respon
         _count: {
           select: { replies: true },
         },
+        replies: {
+          select: {
+            user: {
+              select: { id: true, name: true, avatar: true },
+            },
+          },
+          distinct: ['userId'],
+          take: 5,
+        },
       },
       orderBy: { createdAt: 'desc' },
       take: limit + 1,
@@ -165,8 +174,17 @@ router.get('/:id/messages', authMiddleware, async (req: AuthRequest, res: Respon
     const resultMessages = hasMore ? messages.slice(0, -1) : messages;
     const nextCursor = hasMore ? resultMessages[resultMessages.length - 1]?.id : undefined;
 
+    // Extract unique thread participants from replies
+    const enrichedMessages = resultMessages.map((msg) => {
+      const { replies, ...rest } = msg;
+      const threadParticipants = replies
+        ? replies.map((r: { user: { id: number; name: string; avatar: string | null } }) => r.user)
+        : [];
+      return { ...rest, threadParticipants };
+    });
+
     res.json({
-      messages: resultMessages,
+      messages: enrichedMessages,
       nextCursor,
       hasMore,
     });
