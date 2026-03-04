@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import path from 'path';
 import dotenv from 'dotenv';
 
@@ -21,6 +22,7 @@ import { authMiddleware } from './middleware/auth.js';
 
 const app = express();
 
+app.use(helmet());
 const corsOrigin = process.env.CORS_ORIGIN || (process.env.NODE_ENV === 'production' ? false : '*');
 app.use(cors({ origin: corsOrigin as string | boolean }));
 app.use(express.json());
