@@ -125,7 +125,7 @@ export interface ApiMessage {
   deletedAt: string | null;
   user: { id: number; name: string; email: string; avatar?: string | null };
   reactions: ApiReaction[];
-  files: { id: number; filename: string; mimetype: string; size: number; url: string }[];
+  files: { id: number; filename: string; originalName: string; mimetype: string; size: number; url: string }[];
   _count: { replies: number };
 }
 

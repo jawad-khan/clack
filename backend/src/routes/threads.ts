@@ -260,7 +260,7 @@ router.post('/:id/pin', authMiddleware, async (req: AuthRequest, res: Response) 
       include: {
         user: { select: { id: true, name: true, email: true, avatar: true } },
         reactions: { include: { user: { select: { id: true, name: true } } } },
-        files: { select: { id: true, filename: true, mimetype: true, size: true, url: true } },
+        files: { select: { id: true, filename: true, originalName: true, mimetype: true, size: true, url: true } },
         _count: { select: { replies: true } },
       },
     });
@@ -313,7 +313,7 @@ router.delete('/:id/pin', authMiddleware, async (req: AuthRequest, res: Response
       include: {
         user: { select: { id: true, name: true, email: true, avatar: true } },
         reactions: { include: { user: { select: { id: true, name: true } } } },
-        files: { select: { id: true, filename: true, mimetype: true, size: true, url: true } },
+        files: { select: { id: true, filename: true, originalName: true, mimetype: true, size: true, url: true } },
         _count: { select: { replies: true } },
       },
     });
