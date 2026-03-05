@@ -35,7 +35,7 @@ app.use(helmet({
 }));
 const corsOrigin = process.env.CORS_ORIGIN || (process.env.NODE_ENV === 'production' ? false : '*');
 app.use(cors({ origin: corsOrigin as string | boolean }));
-app.use(express.json());
+app.use(express.json({ limit: '100kb' }));
 
 // Note: /uploads is NOT served via express.static to prevent unauthenticated access.
 // Files are served through the authenticated GET /files/:id/download endpoint.

@@ -1,5 +1,6 @@
 import { Router, Response } from 'express';
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import prisma from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { requireChannelMembership } from '../middleware/authorize.js';
@@ -26,16 +27,6 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     const { name, isPrivate } = createChannelSchema.parse(req.body);
     const userId = req.user!.userId;
 
-    // Check for duplicate channel name
-    const existingChannel = await prisma.channel.findFirst({
-      where: { name },
-    });
-
-    if (existingChannel) {
-      res.status(400).json({ error: 'Channel name already exists' });
-      return;
-    }
-
     const channel = await prisma.channel.create({
       data: {
         name,
@@ -61,6 +52,10 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   } catch (error) {
     if (error instanceof z.ZodError) {
       res.status(400).json({ error: error.issues });
+      return;
+    }
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      res.status(400).json({ error: 'Channel name already exists' });
       return;
     }
     console.error('Create channel error:', error);

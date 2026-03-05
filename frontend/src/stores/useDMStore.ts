@@ -32,6 +32,7 @@ interface DMState {
   sendMessage: (userId: number, content: string) => Promise<void>;
   editMessage: (messageId: number, content: string, userId: number) => Promise<void>;
   deleteMessage: (messageId: number, userId: number) => Promise<void>;
+  addIncomingMessage: (dm: ApiDirectMessage, currentUserId: number) => void;
   clearConversation: (userId: number) => void;
   clearSendError: () => void;
 }
@@ -110,6 +111,21 @@ export const useDMStore = create<DMState>((set, get) => ({
   },
 
   clearSendError: () => set({ sendError: null }),
+
+  addIncomingMessage: (dm: ApiDirectMessage, currentUserId: number) => {
+    const otherUserId = dm.fromUserId === currentUserId ? dm.toUserId : dm.fromUserId;
+    const state = get();
+    // Only add if we have this conversation loaded and the message isn't already there
+    if (!state.messages[otherUserId]) return;
+    if (state.messages[otherUserId].some((m) => m.id === dm.id)) return;
+    const message = transformDM(dm);
+    set({
+      messages: {
+        ...state.messages,
+        [otherUserId]: [...state.messages[otherUserId], message],
+      },
+    });
+  },
 
   clearConversation: (userId: number) => {
     set((state) => {

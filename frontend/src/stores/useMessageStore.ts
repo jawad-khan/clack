@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import * as api from '@/lib/api';
 import { getSocket } from '@/lib/socket';
+import { useAuthStore } from '@/stores/useAuthStore';
 import type { Message, Reaction } from '@/lib/types';
 
 function transformApiMessage(msg: api.ApiMessage): Message {
@@ -259,12 +260,5 @@ export const useMessageStore = create<MessageState>((set, get) => ({
 }));
 
 function getUserId(): number | null {
-  const token = localStorage.getItem('token');
-  if (!token) return null;
-  try {
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    return payload.userId;
-  } catch {
-    return null;
-  }
+  return useAuthStore.getState().user?.id ?? null;
 }

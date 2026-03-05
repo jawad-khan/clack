@@ -92,6 +92,18 @@ export function initializeWebSocket(httpServer: HttpServer) {
   io.on('connection', async (socket: AuthenticatedSocket) => {
     console.log(`User ${socket.user?.userId} connected`);
 
+    // Per-socket cache for channel membership (avoids DB query on every typing event)
+    const membershipCache = new Map<number, { result: boolean; expires: number }>();
+    const MEMBERSHIP_CACHE_TTL = 30_000; // 30 seconds
+
+    async function cachedCheckMembership(userId: number, channelId: number): Promise<boolean> {
+      const cached = membershipCache.get(channelId);
+      if (cached && Date.now() < cached.expires) return cached.result;
+      const result = await checkChannelMembership(userId, channelId);
+      membershipCache.set(channelId, { result, expires: Date.now() + MEMBERSHIP_CACHE_TTL });
+      return result;
+    }
+
     // Track user presence
     if (socket.user) {
       const userId = socket.user.userId;
@@ -146,9 +158,11 @@ export function initializeWebSocket(httpServer: HttpServer) {
     });
 
     // Leave channel room
-    socket.on('leave:channel', (channelId: number) => {
-      socket.leave(`channel:${channelId}`);
-      console.log(`User ${socket.user?.userId} left channel ${channelId}`);
+    socket.on('leave:channel', (rawChannelId: unknown) => {
+      const parsed = wsChannelIdSchema.safeParse(rawChannelId);
+      if (!parsed.success) return;
+      socket.leave(`channel:${parsed.data}`);
+      console.log(`User ${socket.user?.userId} left channel ${parsed.data}`);
     });
 
     // Send message
@@ -310,14 +324,14 @@ export function initializeWebSocket(httpServer: HttpServer) {
       }
     });
 
-    // Typing indicator
+    // Typing indicator (uses cached membership to avoid DB query per keystroke)
     socket.on('typing:start', async (rawChannelId: unknown) => {
       if (!socket.user) return;
       const parsed = wsChannelIdSchema.safeParse(rawChannelId);
       if (!parsed.success) return;
       const channelId = parsed.data;
 
-      const isMember = await checkChannelMembership(socket.user.userId, channelId);
+      const isMember = await cachedCheckMembership(socket.user.userId, channelId);
       if (!isMember) return;
 
       socket.to(`channel:${channelId}`).emit('typing:start', {
@@ -332,7 +346,7 @@ export function initializeWebSocket(httpServer: HttpServer) {
       if (!parsed.success) return;
       const channelId = parsed.data;
 
-      const isMember = await checkChannelMembership(socket.user.userId, channelId);
+      const isMember = await cachedCheckMembership(socket.user.userId, channelId);
       if (!isMember) return;
 
       socket.to(`channel:${channelId}`).emit('typing:stop', {
@@ -382,8 +396,12 @@ export function initializeWebSocket(httpServer: HttpServer) {
     });
 
     // Leave DM conversation room
-    socket.on('dm:leave', (otherUserId: number) => {
+    socket.on('dm:leave', (rawOtherUserId: unknown) => {
       if (!socket.user) return;
+
+      const parsed = wsUserIdSchema.safeParse(rawOtherUserId);
+      if (!parsed.success) return;
+      const otherUserId = parsed.data;
 
       const roomId = [socket.user.userId, otherUserId].sort().join('-');
       socket.leave(`dm:${roomId}`);
@@ -426,13 +444,9 @@ export function initializeWebSocket(httpServer: HttpServer) {
           include: DM_INCLUDE_USERS,
         });
 
-        // Emit to both users' personal rooms
+        // Emit to both users' personal rooms (every connected user is always in their user room)
         io.to(`user:${socket.user.userId}`).emit('dm:new', dm);
         io.to(`user:${data.toUserId}`).emit('dm:new', dm);
-
-        // Also emit to the DM conversation room
-        const roomId = [socket.user.userId, data.toUserId].sort().join('-');
-        io.to(`dm:${roomId}`).emit('dm:new', dm);
       } catch (error) {
         console.error('WebSocket DM error:', error);
         socket.emit('error', { message: 'Failed to send DM' });

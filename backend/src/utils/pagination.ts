@@ -11,7 +11,7 @@ export function paginateResults<T extends { id: number }>(
   limit: number,
 ): { results: T[]; nextCursor: number | undefined; hasMore: boolean } {
   const hasMore = items.length > limit;
-  const results = hasMore ? items.slice(0, -1) : items;
+  const results = hasMore ? items.slice(0, limit) : items;
   const nextCursor = hasMore ? results[results.length - 1]?.id : undefined;
   return { results, nextCursor, hasMore };
 }

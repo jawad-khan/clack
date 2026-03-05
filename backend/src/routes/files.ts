@@ -101,6 +101,8 @@ router.post('/', authMiddleware, upload.single('file'), async (req: AuthRequest,
     const allowedMimesByMagic = new Set([
       'image/jpeg', 'image/png', 'image/gif', 'image/webp',
       'application/pdf', 'application/zip',
+      'audio/mpeg', 'audio/ogg', 'audio/mp4', 'audio/webm',
+      'video/webm', // file-type detects WebM container as video/webm
     ]);
     // Text/JSON files have no magic bytes — allow if client claimed text/plain or application/json
     const textTypes = new Set(['text/plain', 'application/json']);
@@ -260,7 +262,9 @@ router.get('/:id/download', (req: AuthRequest, res: Response, next) => {
     }
 
     res.setHeader('Content-Type', file.mimetype);
-    res.setHeader('Content-Disposition', `inline; filename="${file.originalName}"`);
+    // Sanitize filename to prevent header injection
+    const safeName = file.originalName.replace(/["\\\r\n]/g, '_');
+    res.setHeader('Content-Disposition', `inline; filename="${safeName}"`);
     fs.createReadStream(filePath).pipe(res);
   } catch (error) {
     console.error('Download file error:', error);

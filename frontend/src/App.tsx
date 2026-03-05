@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, Outlet, useNavigate, useParams,
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useChannelStore } from '@/stores/useChannelStore';
 import { useMessageStore } from '@/stores/useMessageStore';
+import { useDMStore } from '@/stores/useDMStore';
 import { useBookmarkStore } from '@/stores/useBookmarkStore';
 import { connectSocket, disconnectSocket, getSocket } from '@/lib/socket';
 import { AppLayout } from '@/components/Layout/AppLayout';
@@ -133,9 +134,14 @@ function AppShell() {
 
     const handleNewDM = (dm: import('@/lib/api').ApiDirectMessage) => {
       const { addOrUpdateDM, activeDMId, incrementDMUnread } = useChannelStore.getState();
+      const currentUser = useAuthStore.getState().user;
       addOrUpdateDM(dm.fromUserId, dm.fromUser.name, dm.fromUser.avatar ?? undefined);
       if (activeDMId !== dm.fromUserId) {
         incrementDMUnread(dm.fromUserId);
+      }
+      // Add message to DM store if conversation is loaded
+      if (currentUser) {
+        useDMStore.getState().addIncomingMessage(dm, currentUser.id);
       }
     };
 
