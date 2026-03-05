@@ -39,18 +39,22 @@ else
   echo "  Bucket already exists."
 fi
 
-# Grant the Cloud Run default service account access to the bucket
-SA_EMAIL="${GCP_PROJECT_ID}@appspot.gserviceaccount.com"
-# Try compute default SA if App Engine SA doesn't exist
-if ! gcloud iam service-accounts describe "${SA_EMAIL}" --project "${GCP_PROJECT_ID}" &>/dev/null; then
-  PROJECT_NUMBER=$(gcloud projects describe "${GCP_PROJECT_ID}" --format='value(projectNumber)')
-  SA_EMAIL="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
-fi
+# Determine the Cloud Run service account (use compute default SA)
+PROJECT_NUMBER=$(gcloud projects describe "${GCP_PROJECT_ID}" --format='value(projectNumber)')
+SA_EMAIL="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
 echo "  Granting storage access to ${SA_EMAIL}..."
 gcloud storage buckets add-iam-policy-binding "gs://${GCS_BUCKET_NAME}" \
   --member="serviceAccount:${SA_EMAIL}" \
   --role="roles/storage.objectAdmin" \
   --project "${GCP_PROJECT_ID}" 2>/dev/null || true
+
+# Grant signBlob permission (required to generate GCS signed URLs)
+echo "  Granting Service Account Token Creator role for signed URLs..."
+gcloud projects add-iam-policy-binding "${GCP_PROJECT_ID}" \
+  --member="serviceAccount:${SA_EMAIL}" \
+  --role="roles/iam.serviceAccountTokenCreator" \
+  --condition=None \
+  --quiet 2>/dev/null || true
 echo "  GCS bucket ready."
 echo ""
 
