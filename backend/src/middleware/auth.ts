@@ -14,7 +14,12 @@ export function authMiddleware(req: AuthRequest, res: Response, next: NextFuncti
   const token = authHeader.split(' ')[1];
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
+    const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload & { purpose?: string };
+    // Reject scoped tokens (e.g. file-download) from being used as general auth
+    if (decoded.purpose) {
+      res.status(401).json({ error: 'Invalid token' });
+      return;
+    }
     req.user = decoded;
     next();
   } catch (error) {

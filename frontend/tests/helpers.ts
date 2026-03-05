@@ -84,10 +84,36 @@ export async function waitForMessage(page: Page, text: string) {
  * message:send is not emitted before the server has processed join:channel.
  */
 export async function waitForChannelReady(page: Page) {
-  // Wait for the editor to be interactive, then give socket join time to settle
+  // Wait for the editor to be interactive
   await expect(page.locator('.ql-editor')).toBeVisible({ timeout: 10_000 });
-  // Allow server-side join:channel processing to complete (1.2s covers DB lookup + network latency)
-  await page.waitForTimeout(1200);
+  // Wait for the WebSocket to be connected and confirm the channel join via ack
+  await page.evaluate(() => {
+    return new Promise<void>((resolve) => {
+      const timeout = setTimeout(resolve, 5000);
+      const check = () => {
+        const socket = (window as any).__socket;
+        if (!socket?.connected) {
+          setTimeout(check, 100);
+          return;
+        }
+        // Get all channel IDs this user is a member of from the sidebar buttons
+        // by reading data attributes, or re-join current channels
+        const url = window.location.href;
+        const match = url.match(/\/c\/(\d+)/);
+        if (match) {
+          const channelId = parseInt(match[1]);
+          socket.emit('join:channel', channelId, () => {
+            clearTimeout(timeout);
+            resolve();
+          });
+        } else {
+          clearTimeout(timeout);
+          resolve();
+        }
+      };
+      check();
+    });
+  });
 }
 
 /**

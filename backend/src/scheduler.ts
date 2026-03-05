@@ -48,28 +48,32 @@ export function startScheduler(): NodeJS.Timeout {
             continue;
           }
 
-          // Create the actual message
-          const message = await prisma.message.create({
-            data: {
-              content: scheduled.content,
-              userId: scheduled.userId,
-              channelId: scheduled.channelId,
-            },
-            include: {
-              user: {
-                select: { id: true, name: true, email: true, avatar: true },
+          // Atomically claim and create message to prevent duplicates on crash
+          const message = await prisma.$transaction(async (tx) => {
+            const claimed = await tx.scheduledMessage.updateMany({
+              where: { id: scheduled.id, sent: false },
+              data: { sent: true },
+            });
+            if (claimed.count === 0) return null; // Already processed
+
+            return tx.message.create({
+              data: {
+                content: scheduled.content,
+                userId: scheduled.userId,
+                channelId: scheduled.channelId,
               },
-              files: {
-                select: { id: true, filename: true, originalName: true, mimetype: true, size: true, url: true },
+              include: {
+                user: {
+                  select: { id: true, name: true, email: true, avatar: true },
+                },
+                files: {
+                  select: { id: true, filename: true, originalName: true, mimetype: true, size: true, url: true },
+                },
               },
-            },
+            });
           });
 
-          // Mark the scheduled message as sent
-          await prisma.scheduledMessage.update({
-            where: { id: scheduled.id },
-            data: { sent: true },
-          });
+          if (!message) continue; // Already claimed by another instance
 
           // Broadcast via WebSocket to the channel
           if (io) {

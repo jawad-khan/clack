@@ -19,6 +19,8 @@ export function connectSocket(): Socket {
 
   socket.on('connect', () => {
     console.log('[socket] connected, id:', socket?.id);
+    // Expose for E2E test introspection
+    (window as any).__socket = socket;
   });
 
   socket.on('connect_error', (err) => {

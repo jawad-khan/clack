@@ -290,6 +290,7 @@ router.get('/:id/download', (req: AuthRequest, res: Response, next) => {
     }
 
     res.setHeader('Content-Type', file.mimetype);
+    res.setHeader('Content-Length', file.size);
     // Sanitize filename to prevent header injection
     const safeName = file.originalName.replace(/["\\\r\n]/g, '_');
     res.setHeader('Content-Disposition', `inline; filename="${safeName}"`);

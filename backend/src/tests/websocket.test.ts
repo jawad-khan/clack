@@ -186,7 +186,7 @@ describe('WebSocket', () => {
 
             // Listen for typing indicator on client1
             clientSocket.on('typing:start', (data) => {
-              expect(data.email).toBe('ws-test2@example.com');
+              expect(data.userId).toBeDefined();
               clientSocket2.disconnect();
               done();
             });

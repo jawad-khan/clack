@@ -115,12 +115,13 @@ export function initializeWebSocket(httpServer: HttpServer) {
     }
 
     // Join channel room
-    socket.on('join:channel', async (rawChannelId: unknown) => {
+    socket.on('join:channel', async (rawChannelId: unknown, ack?: (ok: boolean) => void) => {
       if (!socket.user) return;
 
       const parsed = wsChannelIdSchema.safeParse(rawChannelId);
       if (!parsed.success) {
         socket.emit('error', { message: 'Invalid channel ID' });
+        if (typeof ack === 'function') ack(false);
         return;
       }
       const channelId = parsed.data;
@@ -128,11 +129,13 @@ export function initializeWebSocket(httpServer: HttpServer) {
       const isMember = await checkChannelMembership(socket.user.userId, channelId);
       if (!isMember) {
         socket.emit('error', { message: 'You must join the channel first' });
+        if (typeof ack === 'function') ack(false);
         return;
       }
 
       socket.join(`channel:${channelId}`);
       console.log(`User ${socket.user.userId} joined channel ${channelId}`);
+      if (typeof ack === 'function') ack(true);
     });
 
     // Leave channel room
@@ -162,44 +165,32 @@ export function initializeWebSocket(httpServer: HttpServer) {
           return;
         }
 
-        // Validate fileIds if provided
-        if (data.fileIds && data.fileIds.length > 0) {
-          const files = await prisma.file.findMany({
-            where: {
-              id: { in: data.fileIds },
-              userId: socket.user.userId,
-              messageId: null,
+        // Create message and atomically attach files in a transaction
+        const finalMessage = await prisma.$transaction(async (tx) => {
+          const msg = await tx.message.create({
+            data: {
+              content: data.content,
+              userId: socket.user!.userId,
+              channelId: data.channelId,
+              threadId: data.threadId,
             },
           });
 
-          if (files.length !== data.fileIds.length) {
-            socket.emit('error', { message: 'Invalid file IDs or files already attached' });
-            return;
+          // Attach files atomically — validates ownership and unattached status
+          if (data.fileIds && data.fileIds.length > 0) {
+            const updated = await tx.file.updateMany({
+              where: { id: { in: data.fileIds }, userId: socket.user!.userId, messageId: null },
+              data: { messageId: msg.id },
+            });
+            if (updated.count !== data.fileIds.length) {
+              throw new Error('Invalid file IDs or files already attached');
+            }
           }
-        }
 
-        const message = await prisma.message.create({
-          data: {
-            content: data.content,
-            userId: socket.user.userId,
-            channelId: data.channelId,
-            threadId: data.threadId,
-          },
-          include: MESSAGE_INCLUDE_WITH_FILES,
-        });
-
-        // Attach files to the message
-        if (data.fileIds && data.fileIds.length > 0) {
-          await prisma.file.updateMany({
-            where: { id: { in: data.fileIds }, userId: socket.user.userId },
-            data: { messageId: message.id },
+          return tx.message.findUnique({
+            where: { id: msg.id },
+            include: MESSAGE_INCLUDE_WITH_FILES,
           });
-        }
-
-        // Fetch final message with files
-        const finalMessage = await prisma.message.findUnique({
-          where: { id: message.id },
-          include: MESSAGE_INCLUDE_WITH_FILES,
         });
 
         // Always emit to the sender so they see their own message immediately,
@@ -314,7 +305,6 @@ export function initializeWebSocket(httpServer: HttpServer) {
 
       socket.to(`channel:${channelId}`).emit('typing:start', {
         userId: socket.user.userId,
-        email: socket.user.email,
       });
     });
 
@@ -440,7 +430,6 @@ export function initializeWebSocket(httpServer: HttpServer) {
 
       io.to(`user:${toUserId}`).emit('dm:typing:start', {
         userId: socket.user.userId,
-        email: socket.user.email,
       });
     });
 

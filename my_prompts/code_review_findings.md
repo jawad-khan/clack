@@ -133,3 +133,12 @@
 - [x] Fix #16: Audio MIME types
 - [x] Fix #17: CORS production check (already safe — falls back to false in production)
 - [x] Fix #18: ChannelRead FK (added relation with onDelete: SetNull)
+
+### Fixes from second code review (my_prompts/code_review.md)
+- [x] #1: Download token scope escape — authMiddleware now rejects tokens with `purpose` claim
+- [x] #2: File attachment TOCTOU race — wrapped create+attach in $transaction
+- [x] #8: Typing indicator email leak — removed email from typing events
+- [x] #10: Scheduled message idempotency — atomic claim-then-create in $transaction
+- [x] #11: Pagination cursor validation — reject NaN/negative cursors
+- [x] #13: Missing Content-Length on downloads — added header
+- [x] #15: WebSocket validation inconsistency — added whitespace/null-byte refines to WS schemas

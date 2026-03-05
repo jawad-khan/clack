@@ -164,15 +164,18 @@ test.describe('DM Message Actions', () => {
     await expect(page2.getByTestId('dm-conversation')).toBeVisible({ timeout: 5000 });
     await expect(page2.getByTestId('dm-conversation').getByText('Hello from user 1')).toBeVisible({ timeout: 5000 });
 
-    // User 2 hovers over user 1's message and opens more actions
+    // User 2 hovers over user 1's message — the toolbar should appear but
+    // the "more actions" button should NOT be visible since user 2 is not the owner.
     const msgRow = page2.getByTestId('dm-conversation').locator('div').filter({ hasText: 'Hello from user 1' }).last();
     await msgRow.hover();
 
-    const moreBtn = page2.getByTestId('dm-more-btn').first();
-    await expect(moreBtn).toBeVisible({ timeout: 3000 });
-    await moreBtn.click();
+    // The toolbar itself appears on hover (with emoji button)
+    await expect(page2.getByTestId('dm-message-toolbar').first()).toBeVisible({ timeout: 3000 });
 
-    // Edit and delete buttons should NOT be visible (not the owner)
+    // But the "more actions" button is hidden for non-owners
+    await expect(page2.getByTestId('dm-more-btn')).not.toBeVisible();
+
+    // Edit and delete buttons should also NOT be visible
     await expect(page2.getByTestId('dm-edit-btn')).not.toBeVisible();
     await expect(page2.getByTestId('dm-delete-btn')).not.toBeVisible();
 

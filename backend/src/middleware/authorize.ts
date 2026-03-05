@@ -186,16 +186,20 @@ export async function checkChannelMembership(
 
 // ── Zod Schemas for WebSocket Payloads ──────────────────────────────
 
+const contentSchema = z.string().min(1).max(4000)
+  .refine(val => val.trim().length > 0, { message: 'Content cannot be empty' })
+  .refine(val => !val.includes('\u0000'), { message: 'Content cannot contain null bytes' });
+
 export const wsMessageSendSchema = z.object({
   channelId: z.number().int().positive(),
-  content: z.string().min(1).max(4000),
+  content: contentSchema,
   threadId: z.number().int().positive().optional(),
   fileIds: z.array(z.number().int().positive()).optional(),
 });
 
 export const wsMessageEditSchema = z.object({
   messageId: z.number().int().positive(),
-  content: z.string().min(1).max(4000),
+  content: contentSchema,
 });
 
 export const wsMessageDeleteSchema = z.object({
@@ -204,7 +208,7 @@ export const wsMessageDeleteSchema = z.object({
 
 export const wsDmSendSchema = z.object({
   toUserId: z.number().int().positive(),
-  content: z.string().min(1).max(4000),
+  content: contentSchema,
 });
 
 export const wsChannelIdSchema = z.number().int().positive();
