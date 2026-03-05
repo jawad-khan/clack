@@ -145,6 +145,10 @@ function AppShell() {
       useChannelStore.getState().updateMemberCount(data.channelId, data.memberCount);
     };
 
+    const handleMemberLeft = (data: { channelId: number; memberCount: number }) => {
+      useChannelStore.getState().updateMemberCount(data.channelId, data.memberCount);
+    };
+
     const handleChannelJoined = () => {
       // Re-fetch channels so the new channel appears in the sidebar
       useChannelStore.getState().fetchChannels();
@@ -156,6 +160,7 @@ function AppShell() {
     socket.on('dm:new', handleNewDM);
     socket.on('presence:update', handlePresenceUpdate);
     socket.on('channel:member-added', handleMemberAdded);
+    socket.on('channel:member-left', handleMemberLeft);
     socket.on('channel:joined', handleChannelJoined);
 
     return () => {
@@ -165,6 +170,7 @@ function AppShell() {
       socket.off('dm:new', handleNewDM);
       socket.off('presence:update', handlePresenceUpdate);
       socket.off('channel:member-added', handleMemberAdded);
+      socket.off('channel:member-left', handleMemberLeft);
       socket.off('channel:joined', handleChannelJoined);
       disconnectSocket();
     };

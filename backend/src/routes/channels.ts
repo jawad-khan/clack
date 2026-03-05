@@ -252,6 +252,17 @@ router.post('/:id/leave', authMiddleware, requireChannelMembership, async (req: 
       },
     });
 
+    // Broadcast to other channel members
+    const updatedCount = await prisma.channelMember.count({ where: { channelId } });
+    const io = getIO();
+    if (io) {
+      io.to(`channel:${channelId}`).emit('channel:member-left', {
+        channelId,
+        userId,
+        memberCount: updatedCount,
+      });
+    }
+
     res.json({ message: 'Left channel successfully' });
   } catch (error) {
     console.error('Leave channel error:', error);
