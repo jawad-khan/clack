@@ -162,7 +162,7 @@ test.describe('Bug #9: Registration error display', () => {
     await page.getByRole('button', { name: /create account/i }).click();
 
     // Should show error message
-    await expect(page.getByText(/already registered|already exists|error/i)).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByText(/unable to complete registration|already registered|already exists|error/i)).toBeVisible({ timeout: 5_000 });
   });
 
   test('shows error for mismatched passwords', async ({ page }) => {
