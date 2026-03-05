@@ -65,24 +65,11 @@ echo "Cloning ${REPO_URL} (main) into ${DEPLOY_DIR}..."
 git clone --depth 1 --branch main "${REPO_URL}" "${DEPLOY_DIR}"
 echo ""
 
-# ── Deploy to Cloud Run ──────────────────────────────────────────────
-gcloud run deploy "${SERVICE_NAME}" \
-  --source "${DEPLOY_DIR}" \
+# ── Build and deploy (with Docker layer caching) ────────────────────
+gcloud builds submit "${DEPLOY_DIR}" \
+  --config="${DEPLOY_DIR}/cloudbuild.yaml" \
   --project "${GCP_PROJECT_ID}" \
-  --region "${REGION}" \
-  --add-cloudsql-instances "${CLOUD_SQL_INSTANCE}" \
-  --set-env-vars "DATABASE_URL=${DATABASE_URL}" \
-  --set-env-vars "JWT_SECRET=${JWT_SECRET}" \
-  --set-env-vars "GCS_BUCKET_NAME=${GCS_BUCKET_NAME}" \
-  --set-env-vars "NODE_ENV=production" \
-  --set-env-vars "RUN_SEED=${RUN_SEED}" \
-  --timeout 3600 \
-  --session-affinity \
-  --min-instances 0 \
-  --max-instances 3 \
-  --memory 512Mi \
-  --cpu 1 \
-  --allow-unauthenticated
+  --substitutions="_DATABASE_URL=${DATABASE_URL},_JWT_SECRET=${JWT_SECRET},_GCS_BUCKET=${GCS_BUCKET_NAME},_RUN_SEED=${RUN_SEED}"
 
 echo ""
 echo "Deploy complete! Service URL:"

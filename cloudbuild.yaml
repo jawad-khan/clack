@@ -1,0 +1,54 @@
+steps:
+  # Pull previous image for cache (ignore failure on first build)
+  - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: 'bash'
+    args: ['-c', 'docker pull ${_IMAGE}:latest || true']
+
+  # Build with cache
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '--cache-from=${_IMAGE}:latest'
+      - '-t=${_IMAGE}:${SHORT_SHA}'
+      - '-t=${_IMAGE}:latest'
+      - '.'
+
+  # Push both tags
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', '--all-tags', '${_IMAGE}']
+
+  # Deploy to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - '${_SERVICE}'
+      - '--image=${_IMAGE}:${SHORT_SHA}'
+      - '--region=${_REGION}'
+      - '--add-cloudsql-instances=${_CLOUD_SQL}'
+      - '--set-env-vars=DATABASE_URL=${_DATABASE_URL}'
+      - '--set-env-vars=JWT_SECRET=${_JWT_SECRET}'
+      - '--set-env-vars=GCS_BUCKET_NAME=${_GCS_BUCKET}'
+      - '--set-env-vars=NODE_ENV=production'
+      - '--set-env-vars=RUN_SEED=${_RUN_SEED}'
+      - '--timeout=3600'
+      - '--session-affinity'
+      - '--min-instances=0'
+      - '--max-instances=3'
+      - '--memory=512Mi'
+      - '--cpu=1'
+      - '--allow-unauthenticated'
+
+substitutions:
+  _SERVICE: slawk
+  _REGION: us-central1
+  _IMAGE: us-central1-docker.pkg.dev/${PROJECT_ID}/cloud-run-source-deploy/slawk
+  _CLOUD_SQL: ${PROJECT_ID}:us-central1:slawk-db
+  _GCS_BUCKET: slawk-uploads-${PROJECT_ID}
+  _RUN_SEED: 'false'
+  _DATABASE_URL: ''
+  _JWT_SECRET: ''
+
+options:
+  logging: CLOUD_LOGGING_ONLY
