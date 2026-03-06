@@ -31,10 +31,11 @@ interface MessageInputProps {
   sendError: string | null;
   clearSendError: () => void;
   channelId?: number;
+  dmParticipantIds?: number[];
   testIdPrefix?: string;
 }
 
-export function MessageInput({ placeholder, onSend, sendError, clearSendError, channelId, testIdPrefix }: MessageInputProps) {
+export function MessageInput({ placeholder, onSend, sendError, clearSendError, channelId, dmParticipantIds, testIdPrefix }: MessageInputProps) {
   const prefix = testIdPrefix ? `${testIdPrefix}-` : '';
   const editorRef = useRef<HTMLDivElement>(null);
   const quillRef = useRef<Quill | null>(null);
@@ -301,7 +302,13 @@ export function MessageInput({ placeholder, onSend, sendError, clearSendError, c
     const timer = setTimeout(async () => {
       try {
         const users = await getUsers(mentionQuery || undefined);
-        if (!cancelled) setMentionUsers(users);
+        if (!cancelled) {
+          // In DMs, only allow mentioning the participants
+          const filtered = dmParticipantIds
+            ? users.filter((u) => dmParticipantIds.includes(u.id))
+            : users;
+          setMentionUsers(filtered);
+        }
       } catch {
         // ignore
       }
@@ -310,7 +317,7 @@ export function MessageInput({ placeholder, onSend, sendError, clearSendError, c
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [showMentionDropdown, mentionQuery]);
+  }, [showMentionDropdown, mentionQuery, dmParticipantIds]);
 
   const insertMention = useCallback(
     (user: AuthUser) => {

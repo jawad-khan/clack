@@ -391,6 +391,7 @@ export function DMConversation({ userId, userName, userAvatar }: DMConversationP
             onSend={async (content) => { await storeSendMessage(userId, content); }}
             sendError={sendError}
             clearSendError={clearSendError}
+            dmParticipantIds={currentUser ? [currentUser.id, userId] : [userId]}
             testIdPrefix="dm"
           />
         </div>
