@@ -205,3 +205,10 @@ body {
 .slawk-editor .ql-editor a:hover {
   text-decoration: underline;
 }
+
+/* Hide volume control on voice note audio players */
+.voice-note-audio::-webkit-media-controls-volume-button,
+.voice-note-audio::-webkit-media-controls-mute-button,
+.voice-note-audio::-webkit-media-controls-volume-slider {
+  display: none !important;
+}

@@ -182,8 +182,9 @@ export function Message({ message, showAvatar, isCompact, onOpenThread }: Messag
                   <div className="px-3 py-2.5 min-w-[280px]">
                     <audio
                       controls
+                      controlsList="nodownload noplaybackrate"
                       preload="auto"
-                      className="h-8 w-[260px]"
+                      className="h-8 w-[260px] voice-note-audio"
                       src={getAuthFileUrl(file.url)}
                     />
                   </div>
