@@ -56,9 +56,10 @@ export function ProfileModal({ userId, onClose }: ProfileModalProps) {
       });
       setProfile(updated);
       setIsEditing(false);
-      // Propagate name change to auth store and cached messages
+      // Propagate name change to auth store, cached messages, and DM sidebar
       useAuthStore.getState().updateUser({ name: updated.name });
       useMessageStore.getState().updateUserInMessages(updated.id, { name: updated.name });
+      useChannelStore.getState().updateDMUser(updated.id, { userName: updated.name });
     } catch {
       setSaveError('Failed to save profile. Please try again.');
     } finally {
@@ -96,6 +97,7 @@ export function ProfileModal({ userId, onClose }: ProfileModalProps) {
       setProfile(updated);
       useAuthStore.getState().updateUser({ avatar: updated.avatar });
       useMessageStore.getState().updateUserInMessages(updated.id, { avatar: updated.avatar ?? undefined });
+      useChannelStore.getState().updateDMUser(updated.id, { userAvatar: updated.avatar || '' });
     } catch {
       setSaveError('Failed to upload photo. Please try again.');
     } finally {

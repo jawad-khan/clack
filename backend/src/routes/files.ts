@@ -1,4 +1,4 @@
-import { Router, Response } from 'express';
+import { Router, Response, NextFunction } from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -120,8 +120,9 @@ router.post('/', authMiddleware, upload.single('file'), async (req: AuthRequest,
       // Override client-provided mimetype with detected one,
       // but keep audio/webm when client claims audio in a WebM container
       // (file-type detects all WebM as video/webm even for audio-only)
-      if (detectedType.mime === 'video/webm' && file.mimetype === 'audio/webm') {
-        // keep client's audio/webm
+      if (detectedType.mime === 'video/webm' && file.mimetype.startsWith('audio/webm')) {
+        // keep client's audio/webm (may include codec params like audio/webm;codecs=opus)
+        file.mimetype = 'audio/webm';
       } else {
         file.mimetype = detectedType.mime;
       }
@@ -269,15 +270,19 @@ router.get('/:id/download', (req: AuthRequest, res: Response, next) => {
         res.status(403).json({ error: 'Invalid download token' });
         return;
       }
-      // Set auth header so authMiddleware succeeds
-      req.headers.authorization = `Bearer ${req.query.token}`;
+      // Set user directly — authMiddleware rejects scoped tokens
+      req.user = { userId: payload.userId, email: payload.email, iat: payload.iat };
     } catch {
       res.status(401).json({ error: 'Invalid or expired download token' });
       return;
     }
   }
   next();
-}, authMiddleware, requireFileAccess, async (req: AuthRequest, res: Response) => {
+}, (req: AuthRequest, res: Response, next: NextFunction) => {
+  // Skip authMiddleware if user was already set by download token
+  if (req.user) return next();
+  authMiddleware(req, res, next);
+}, requireFileAccess, async (req: AuthRequest, res: Response) => {
   try {
     const file = req.file;
 

@@ -179,19 +179,13 @@ export function Message({ message, showAvatar, isCompact, onOpenThread }: Messag
                 className="rounded-lg border border-slack-border overflow-hidden"
               >
                 {file.mimetype.startsWith('audio/') || (file.mimetype === 'video/webm' && file.originalName.startsWith('voice-message')) ? (
-                  <div className="flex items-center gap-3 px-3 py-2.5 min-w-[280px]">
-                    <Mic className="h-5 w-5 text-slack-link flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <audio
-                        controls
-                        preload="metadata"
-                        className="h-8 w-full max-w-[240px]"
-                        src={getAuthFileUrl(file.url)}
-                      />
-                      <span className="block text-[11px] text-slack-disabled mt-0.5">
-                        {file.originalName} &middot; {formatFileSize(file.size)}
-                      </span>
-                    </div>
+                  <div className="px-3 py-2.5 min-w-[280px]">
+                    <audio
+                      controls
+                      preload="metadata"
+                      className="h-8 w-[260px]"
+                      src={getAuthFileUrl(file.url)}
+                    />
                   </div>
                 ) : file.mimetype.startsWith('image/') ? (
                   <div>
@@ -229,9 +223,8 @@ export function Message({ message, showAvatar, isCompact, onOpenThread }: Messag
                     <FileIcon className="h-8 w-8 text-slack-link flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                       <a
-                        href={getAuthFileUrl(file.url)}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                        href={getAuthFileUrl(file.url, { download: true })}
+                        download={file.originalName}
                         className="block text-[13px] font-medium text-slack-link hover:underline truncate"
                       >
                         {file.originalName}

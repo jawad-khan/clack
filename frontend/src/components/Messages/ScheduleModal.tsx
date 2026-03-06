@@ -58,7 +58,11 @@ export function ScheduleModal({ onSchedule, onClose, isScheduling }: ScheduleMod
             disabled={!customScheduleAt || isScheduling}
             onClick={() => {
               if (!customScheduleAt) return;
-              onSchedule(new Date(customScheduleAt));
+              // Parse datetime-local string as local time (not UTC)
+              const [datePart, timePart] = customScheduleAt.split('T');
+              const [year, month, day] = datePart.split('-').map(Number);
+              const [hour, minute] = timePart.split(':').map(Number);
+              onSchedule(new Date(year, month - 1, day, hour, minute));
             }}
             className={cn(
               'px-4 py-1.5 text-[14px] font-medium',

@@ -30,8 +30,11 @@ async function refreshDownloadToken(): Promise<string | null> {
   }
 }
 
-// Eagerly refresh on module load if authenticated
-if (localStorage.getItem('token')) refreshDownloadToken();
+// Eagerly refresh on module load if authenticated, and keep refreshing periodically
+if (localStorage.getItem('token')) {
+  refreshDownloadToken();
+  setInterval(() => refreshDownloadToken(), 3 * 60 * 1000); // refresh every 3 min
+}
 
 /**
  * Appends a scoped download token to a file URL for use in <img> and <a> tags
@@ -46,12 +49,13 @@ export function getAuthFileUrl(url: string, { download = false }: { download?: b
       const sep1 = result.includes('?') ? '&' : '?';
       result = `${result}${sep1}dl=1`;
     }
-    const token = _downloadToken;
-    if (token) {
+    const now = Date.now();
+    if (_downloadToken && now < _downloadTokenExpires) {
       const sep2 = result.includes('?') ? '&' : '?';
-      return `${result}${sep2}token=${token}`;
+      return `${result}${sep2}token=${_downloadToken}`;
     }
-    // Trigger async refresh for next render
+    // Token expired or missing — trigger async refresh for next render
+    _downloadToken = null;
     refreshDownloadToken();
     return result;
   }
