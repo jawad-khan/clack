@@ -137,14 +137,22 @@ export function DMConversation({ userId, userName, userAvatar }: DMConversationP
         <div className="flex h-[49px] items-center justify-between px-4">
           {/* Left Section */}
           <div className="flex items-center gap-1">
-            <Avatar
-              src={userAvatar || undefined}
-              alt={userName}
-              fallback={userName}
-              size="md"
-              status={dmEntry?.userStatus || 'offline'}
-            />
-            <span className="ml-2 text-[18px] font-bold text-slack-primary">{userName}{isSelf && <span className="font-normal text-slack-hint"> (you)</span>}</span>
+            <button onClick={() => openProfile(userId)} disabled={isSelf} className={cn(!isSelf && 'cursor-pointer')}>
+              <Avatar
+                src={userAvatar || undefined}
+                alt={userName}
+                fallback={userName}
+                size="md"
+                status={dmEntry?.userStatus || 'offline'}
+              />
+            </button>
+            <button
+              onClick={() => openProfile(userId)}
+              disabled={isSelf}
+              className={cn('ml-2 text-[18px] font-bold text-slack-primary', !isSelf && 'cursor-pointer hover:underline')}
+            >
+              {userName}{isSelf && <span className="font-normal text-slack-hint"> (you)</span>}
+            </button>
             <Button
               variant="toolbar"
               size="icon-xs"
