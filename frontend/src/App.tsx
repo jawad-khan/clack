@@ -139,15 +139,20 @@ function AppShell() {
     const handleNewDM = (dm: import('@/lib/api').ApiDirectMessage) => {
       const { addOrUpdateDM, activeDMId, incrementDMUnread } = useChannelStore.getState();
       const currentUser = useAuthStore.getState().user;
-      const isSelfDM = currentUser && dm.fromUserId === currentUser.id && dm.toUserId === currentUser.id;
-      addOrUpdateDM(dm.fromUserId, dm.fromUser.name, dm.fromUser.avatar ?? undefined);
-      if (activeDMId !== dm.fromUserId && !isSelfDM) {
-        incrementDMUnread(dm.fromUserId);
+      if (!currentUser) return;
+      const isSelfDM = dm.fromUserId === currentUser.id && dm.toUserId === currentUser.id;
+      // Determine the other user in the conversation
+      const isFromMe = dm.fromUserId === currentUser.id;
+      const otherUser = isFromMe ? dm.toUser : dm.fromUser;
+      const otherUserId = otherUser.id;
+      if (!isSelfDM) {
+        addOrUpdateDM(otherUserId, otherUser.name, otherUser.avatar ?? undefined);
+      }
+      if (activeDMId !== otherUserId && !isSelfDM) {
+        incrementDMUnread(otherUserId);
       }
       // Add message to DM store if conversation is loaded
-      if (currentUser) {
-        useDMStore.getState().addIncomingMessage(dm, currentUser.id);
-      }
+      useDMStore.getState().addIncomingMessage(dm, currentUser.id);
     };
 
     const handlePresenceUpdate = (data: { userId: number; status: string }) => {
