@@ -3,6 +3,8 @@ ARG BASE_IMAGE=us-central1-docker.pkg.dev/ncvgl-gcp/cloud-run-source-deploy/slaw
 # ── Stage 1: Build frontend (deps from base) ────────────────────────
 FROM ${BASE_IMAGE} AS frontend-build
 WORKDIR /app/frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
 COPY frontend/ ./
 RUN npx vite build
 
