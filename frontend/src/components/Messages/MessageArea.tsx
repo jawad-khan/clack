@@ -1,5 +1,4 @@
 import { useState, useCallback, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
 import { Hash } from 'lucide-react';
 import { useChannelStore } from '@/stores/useChannelStore';
 import { useMessageStore } from '@/stores/useMessageStore';
@@ -12,11 +11,8 @@ import { ThreadPanel } from './ThreadPanel';
 import { DMConversation } from './DMConversation';
 import { PinsPanel } from './PinsPanel';
 import { FilesPanel } from './FilesPanel';
-import { FilesPage } from './FilesPage';
-import { LaterPage } from './LaterPage';
 
 export function MessageArea() {
-  const location = useLocation();
   const { activeChannelId, activeDMId, getActiveChannel, getActiveDM } = useChannelStore();
   const activeChannel = getActiveChannel();
   const activeDM = getActiveDM();
@@ -52,16 +48,6 @@ export function MessageArea() {
       ),
     }));
   }, []);
-
-  // Show full-page Files view when navigated to /files
-  if (location.pathname === '/files') {
-    return <FilesPage />;
-  }
-
-  // Show saved/bookmarked messages view
-  if (location.pathname === '/later') {
-    return <LaterPage />;
-  }
 
   // Show DM conversation if a DM is active
   if (activeDMId && activeDM) {
