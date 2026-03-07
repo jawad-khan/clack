@@ -11,10 +11,8 @@ const scheduleMessageSchema = z.object({
   content: z.string()
     .min(1)
     .max(4000)
-    .refine(
-      (val) => val.trim().length > 0,
-      { message: 'Message content cannot be empty or whitespace only' }
-    ),
+    .refine(val => val.trim().length > 0, { message: 'Message content cannot be empty or whitespace only' })
+    .refine(val => !val.includes('\u0000'), { message: 'Content cannot contain null bytes' }),
   channelId: z.number().int().positive(),
   scheduledAt: z.string().datetime(),
 });
@@ -35,6 +33,15 @@ router.post('/schedule', authMiddleware, async (req: AuthRequest, res: Response)
     const isMember = await checkChannelMembership(userId, channelId);
     if (!isMember) {
       res.status(403).json({ error: 'You must be a member of the channel' });
+      return;
+    }
+
+    // Enforce per-user cap on unsent scheduled messages
+    const pendingCount = await prisma.scheduledMessage.count({
+      where: { userId, sent: false },
+    });
+    if (pendingCount >= 25) {
+      res.status(400).json({ error: 'Maximum of 25 pending scheduled messages allowed' });
       return;
     }
 

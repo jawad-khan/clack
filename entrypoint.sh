@@ -15,7 +15,11 @@ if echo "$DATABASE_URL" | grep -q "/cloudsql/"; then
 fi
 
 echo "Running database migrations..."
-npx prisma migrate deploy
+timeout 60 npx prisma migrate deploy || {
+  echo "Migration failed or timed out, checking status..."
+  npx prisma migrate status
+  exit 1
+}
 
 if [ "$RUN_SEED" = "true" ]; then
   echo "Seeding database..."

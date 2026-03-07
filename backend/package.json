@@ -5,7 +5,8 @@
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
-    "dev": "tsx prisma/seed.ts && UV_THREADPOOL_SIZE=16 tsx watch src/index.ts",
+    "dev": "UV_THREADPOOL_SIZE=16 tsx watch src/index.ts",
+    "dev:seed": "tsx prisma/seed.ts && UV_THREADPOOL_SIZE=16 tsx watch src/index.ts",
     "build": "tsc",
     "start": "UV_THREADPOOL_SIZE=16 node dist/index.js",
     "test": "NODE_OPTIONS='--experimental-vm-modules' jest",

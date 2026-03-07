@@ -12,7 +12,8 @@ const router = Router();
 
 const sendDMSchema = z.object({
   toUserId: z.number().int().positive(),
-  content: z.string().min(1).max(4000),
+  content: z.string().min(1).max(4000)
+    .refine(val => !val.includes('\u0000'), { message: 'Content cannot contain null bytes' }),
 });
 
 // POST /dms - Send a direct message
@@ -215,7 +216,10 @@ router.post('/messages/:id/reply', authMiddleware, requireDmAccess, async (req: 
       return;
     }
 
-    const contentSchema = z.object({ content: z.string().min(1).max(4000) });
+    const contentSchema = z.object({
+      content: z.string().min(1).max(4000)
+        .refine(val => !val.includes('\u0000'), { message: 'Content cannot contain null bytes' }),
+    });
     const { content } = contentSchema.parse(req.body);
 
     // Reply goes to the same conversation (same from/to pair)
@@ -277,7 +281,10 @@ router.patch('/messages/:id', authMiddleware, requireDmOwnership, async (req: Au
   try {
     const dmId = req.dm.id;
 
-    const contentSchema = z.object({ content: z.string().min(1).max(4000) });
+    const contentSchema = z.object({
+      content: z.string().min(1).max(4000)
+        .refine(val => !val.includes('\u0000'), { message: 'Content cannot contain null bytes' }),
+    });
     const { content } = contentSchema.parse(req.body);
 
     const updated = await prisma.directMessage.update({

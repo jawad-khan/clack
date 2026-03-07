@@ -23,6 +23,9 @@ import { authMiddleware } from './middleware/auth.js';
 
 const app = express();
 
+// Trust first proxy (e.g. Cloud Run, nginx) for correct rate-limit keying
+app.set('trust proxy', 1);
+
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
@@ -32,7 +35,8 @@ app.use(helmet({
       'media-src': ["'self'", 'blob:', 'https://storage.googleapis.com'],
     },
   },
-  crossOriginEmbedderPolicy: false,
+  crossOriginEmbedderPolicy: 'credentialless' as any,
+  hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
 }));
 const corsOrigin = process.env.CORS_ORIGIN || (process.env.NODE_ENV === 'production' ? false : '*');
 app.use(cors({ origin: corsOrigin as string | boolean }));
@@ -61,6 +65,16 @@ const apiLimiter = isTest
       message: { error: 'Too many requests, please try again later' },
     });
 
+// Cache-Control: no-store for all API responses
+app.use((req, res, next) => {
+  if (req.path.startsWith('/auth') || req.path.startsWith('/channels') || req.path.startsWith('/messages') ||
+      req.path.startsWith('/files') || req.path.startsWith('/users') || req.path.startsWith('/dms') ||
+      req.path.startsWith('/search') || req.path.startsWith('/bookmarks')) {
+    res.setHeader('Cache-Control', 'no-store');
+  }
+  next();
+});
+
 // Note: /uploads is NOT served via express.static to prevent unauthenticated access.
 // Files are served through the authenticated GET /files/:id/download endpoint.
 
@@ -86,8 +100,9 @@ app.get('/health', (req, res) => {
 // Serve frontend in production
 if (process.env.NODE_ENV === 'production') {
   const frontendDist = path.join(process.cwd(), 'public');
-  app.use(express.static(frontendDist));
+  app.use(express.static(frontendDist, { dotfiles: 'deny' }));
   app.get('/{*splat}', (req, res) => {
+    res.setHeader('Cache-Control', 'no-cache');
     res.sendFile(path.join(frontendDist, 'index.html'));
   });
 }

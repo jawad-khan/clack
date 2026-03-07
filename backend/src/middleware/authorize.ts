@@ -107,9 +107,9 @@ export async function requireFileAccess(
   const userId = req.user!.userId;
 
   if (file.messageId) {
-    // File is attached to a message — check channel membership
+    // File is attached to a message — check channel membership and soft-delete
     const message = await prisma.message.findUnique({
-      where: { id: file.messageId },
+      where: { id: file.messageId, deletedAt: null },
     });
 
     if (!message) {
@@ -233,7 +233,7 @@ export const wsMessageSendSchema = z.object({
   channelId: z.number().int().positive(),
   content: optionalContentSchema,
   threadId: z.number().int().positive().optional(),
-  fileIds: z.array(z.number().int().positive()).optional(),
+  fileIds: z.array(z.number().int().positive()).max(10).optional(),
 }).refine(
   (data) => (data.content?.trim().length ?? 0) > 0 || (data.fileIds && data.fileIds.length > 0),
   { message: 'Message must have content or file attachments' },

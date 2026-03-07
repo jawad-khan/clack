@@ -8,8 +8,11 @@ import { getIO } from '../websocket/index.js';
 
 const router = Router();
 
+const emojiRegex = /^[\p{Emoji}\p{Emoji_Component}\w+_:-]+$/u;
+
 const reactionSchema = z.object({
-  emoji: z.string().min(1).max(32),
+  emoji: z.string().min(1).max(32)
+    .refine(val => emojiRegex.test(val), { message: 'Invalid emoji format' }),
 });
 
 // POST /messages/:id/reactions - Add reaction to message

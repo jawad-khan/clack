@@ -358,7 +358,7 @@ describe('Security - Input Validation', () => {
   });
 
   describe('Bug #12: Orphaned channels', () => {
-    it('should NOT allow last member to leave channel', async () => {
+    it('should delete channel when last member leaves', async () => {
       // Create a new channel where authToken user is the only member
       const channelRes = await request(app)
         .post('/channels')
@@ -371,8 +371,13 @@ describe('Security - Input Validation', () => {
         .post(`/channels/${soloChannelId}/leave`)
         .set('Authorization', `Bearer ${authToken}`);
 
-      expect(res.status).toBe(400);
-      expect(res.body.error).toBe('Cannot leave channel as the last member');
+      expect(res.status).toBe(200);
+
+      // Verify channel was deleted
+      const getRes = await request(app)
+        .get(`/channels/${soloChannelId}`)
+        .set('Authorization', `Bearer ${authToken}`);
+      expect(getRes.status).toBe(404);
     });
   });
 

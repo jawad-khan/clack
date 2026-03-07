@@ -2,6 +2,8 @@ import prisma from '../db.js';
 
 beforeAll(async () => {
   // Clean database before tests
+  await prisma.bookmark.deleteMany();
+  await prisma.scheduledMessage.deleteMany();
   await prisma.reaction.deleteMany();
   await prisma.file.deleteMany();
   await prisma.message.deleteMany();

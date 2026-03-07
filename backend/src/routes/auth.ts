@@ -9,14 +9,19 @@ const router = Router();
 
 const registerSchema = z.object({
   email: z.string().email().max(255),
-  password: z.string().min(6).max(128),
+  password: z.string().min(6).max(72),
   name: z.string().min(1).max(100),
 });
 
 const loginSchema = z.object({
   email: z.string().email(),
-  password: z.string(),
+  password: z.string().max(72),
 });
+
+// Account lockout: track failed login attempts per email
+const loginAttempts = new Map<string, { count: number; lockedUntil: number }>();
+const MAX_FAILED_ATTEMPTS = 10;
+const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
 
 // POST /auth/register
 router.post('/register', async (req: Request, res: Response) => {
@@ -75,7 +80,8 @@ router.post('/register', async (req: Request, res: Response) => {
       }
     }
 
-    const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, {
+    const token = jwt.sign({ userId: user.id }, JWT_SECRET, {
+      algorithm: 'HS256',
       expiresIn: '7d',
     });
 
@@ -95,19 +101,45 @@ router.post('/login', async (req: Request, res: Response) => {
   try {
     const { email, password } = loginSchema.parse(req.body);
 
+    // Check account lockout
+    const attempts = loginAttempts.get(email);
+    if (attempts && attempts.lockedUntil > Date.now()) {
+      res.status(429).json({ error: 'Account temporarily locked. Try again later.' });
+      return;
+    }
+
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
+      // Track failed attempt even for non-existent users (prevent enumeration timing)
+      const current = loginAttempts.get(email) || { count: 0, lockedUntil: 0 };
+      current.count++;
+      if (current.count >= MAX_FAILED_ATTEMPTS) {
+        current.lockedUntil = Date.now() + LOCKOUT_DURATION_MS;
+        current.count = 0;
+      }
+      loginAttempts.set(email, current);
       res.status(401).json({ error: 'Invalid credentials' });
       return;
     }
 
     const validPassword = await bcrypt.compare(password, user.password);
     if (!validPassword) {
+      const current = loginAttempts.get(email) || { count: 0, lockedUntil: 0 };
+      current.count++;
+      if (current.count >= MAX_FAILED_ATTEMPTS) {
+        current.lockedUntil = Date.now() + LOCKOUT_DURATION_MS;
+        current.count = 0;
+      }
+      loginAttempts.set(email, current);
       res.status(401).json({ error: 'Invalid credentials' });
       return;
     }
 
-    const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, {
+    // Clear failed attempts on successful login
+    loginAttempts.delete(email);
+
+    const token = jwt.sign({ userId: user.id }, JWT_SECRET, {
+      algorithm: 'HS256',
       expiresIn: '7d',
     });
 

@@ -10,12 +10,14 @@ import { USER_SELECT_BASIC, MESSAGE_INCLUDE_FULL, MESSAGE_INCLUDE_WITH_FILES } f
 const router = Router();
 
 const replySchema = z.object({
-  content: z.string().min(1).max(4000),
-  fileIds: z.array(z.number()).optional(),
+  content: z.string().min(1).max(4000)
+    .refine(val => !val.includes('\u0000'), { message: 'Content cannot contain null bytes' }),
+  fileIds: z.array(z.number()).max(10).optional(),
 });
 
 const editMessageSchema = z.object({
-  content: z.string().min(1).max(4000),
+  content: z.string().min(1).max(4000)
+    .refine(val => !val.includes('\u0000'), { message: 'Content cannot contain null bytes' }),
 });
 
 // POST /messages/:id/reply - Reply to message (creates thread)

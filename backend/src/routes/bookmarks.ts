@@ -64,8 +64,20 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.userId;
 
-    const bookmarks = await prisma.bookmark.findMany({
+    // Get channels the user is a member of to filter bookmarks
+    const memberChannelIds = (await prisma.channelMember.findMany({
       where: { userId },
+      select: { channelId: true },
+    })).map(m => m.channelId);
+
+    const bookmarks = await prisma.bookmark.findMany({
+      where: {
+        userId,
+        message: {
+          channelId: { in: memberChannelIds },
+          deletedAt: null,
+        },
+      },
       include: {
         message: {
           include: {
@@ -78,14 +90,11 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
       orderBy: { createdAt: 'desc' },
     });
 
-    // Filter out bookmarks where message was deleted
-    const result = bookmarks
-      .filter((b) => b.message && !b.message.deletedAt)
-      .map((b) => ({
-        messageId: b.messageId,
-        createdAt: b.createdAt,
-        message: b.message,
-      }));
+    const result = bookmarks.map((b) => ({
+      messageId: b.messageId,
+      createdAt: b.createdAt,
+      message: b.message,
+    }));
 
     res.json(result);
   } catch (error) {

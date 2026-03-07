@@ -1,27 +1,27 @@
 import { Router, Response } from 'express';
+import { z } from 'zod';
 import prisma from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { AuthRequest } from '../types.js';
 
 const router = Router();
 
+const searchQuerySchema = z.object({
+  q: z.string().min(2).max(200),
+  type: z.enum(['messages', 'dms', 'all']).optional().default('all'),
+  channelId: z.coerce.number().int().positive().optional(),
+});
+
 // GET /search - Search messages and DMs
 router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const query = req.query.q as string;
+    const parsed = searchQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.issues[0]?.message || 'Invalid search parameters' });
+      return;
+    }
+    const { q: query, type, channelId } = parsed.data;
     const userId = req.user!.userId;
-    const type = req.query.type as string; // 'messages', 'dms', or 'all' (default)
-    const channelId = req.query.channelId ? parseInt(req.query.channelId as string) : undefined;
-
-    if (channelId !== undefined && isNaN(channelId)) {
-      res.status(400).json({ error: 'Invalid channelId' });
-      return;
-    }
-
-    if (!query || query.length < 2) {
-      res.status(400).json({ error: 'Search query must be at least 2 characters' });
-      return;
-    }
 
     const searchMessages = type !== 'dms';
     const searchDMs = type !== 'messages';

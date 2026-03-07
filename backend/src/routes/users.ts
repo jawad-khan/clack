@@ -42,8 +42,8 @@ const router = Router();
 const updateProfileSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   avatar: z.string().refine(
-    (url) => url.startsWith('http://') || url.startsWith('https://') || url.startsWith('/users/me/avatar/'),
-    { message: 'Avatar URL must use HTTP/HTTPS or be a local avatar path' }
+    (url) => url.startsWith('https://') || url.startsWith('/users/me/avatar/'),
+    { message: 'Avatar URL must use HTTPS or be a local avatar path' }
   ).optional().nullable(),
   status: z.enum(['online', 'away', 'busy', 'offline']).optional(),
   bio: z.string().max(500).optional().nullable(),
@@ -143,7 +143,7 @@ router.post('/me/avatar', authMiddleware, avatarUpload.single('avatar'), async (
     const outputFilename = crypto.randomUUID() + '.png';
     const outputPath = path.join(uploadDir, outputFilename);
 
-    await sharp(file.path)
+    await sharp(file.path, { limitInputPixels: 4096 * 4096 })
       .resize(512, 512, { fit: 'cover' })
       .png()
       .toFile(outputPath);
@@ -190,7 +190,12 @@ router.get('/me/avatar/:filename', async (req: AuthRequest, res: Response) => {
   }
   res.setHeader('Content-Type', 'image/png');
   res.setHeader('Cache-Control', 'public, max-age=86400');
-  fs.createReadStream(filePath).pipe(res);
+  const stream = fs.createReadStream(filePath);
+  stream.on('error', (err) => {
+    console.error('Avatar stream error:', err);
+    if (!res.headersSent) res.status(500).json({ error: 'Failed to read avatar' });
+  });
+  stream.pipe(res);
 });
 
 // GET /users/:id - Get user by ID

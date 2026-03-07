@@ -10,7 +10,7 @@
     "outDir": "./dist",
     "rootDir": "./src",
     "resolveJsonModule": true,
-    "declaration": true,
+    "declaration": false,
     "isolatedModules": true
   },
   "include": ["src/**/*"],

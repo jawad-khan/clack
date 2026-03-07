@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
+import rateLimit from 'express-rate-limit';
 import { Storage } from '@google-cloud/storage';
 import prisma from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
@@ -67,6 +68,25 @@ const upload = multer({
   },
 });
 
+// Upload-specific rate limit (skip in test)
+const isTest = process.env.NODE_ENV === 'test';
+const uploadLimiter = isTest
+  ? (_req: any, _res: any, next: any) => next()
+  : rateLimit({
+      windowMs: 60_000,
+      max: 10,
+      standardHeaders: true,
+      legacyHeaders: false,
+      message: { error: 'Too many uploads, please try again later' },
+    });
+
+// Safe types that can be shown inline
+const INLINE_SAFE_TYPES = new Set([
+  'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+  'audio/mpeg', 'audio/ogg', 'audio/mp4', 'audio/webm', 'audio/aac',
+  'video/mp4', 'video/webm',
+]);
+
 // Helper to upload to GCS and get signed URL
 async function uploadToGCS(localPath: string, filename: string, mimetype: string): Promise<{ gcsPath: string; signedUrl: string }> {
   if (!bucket) throw new Error('GCS not configured');
@@ -89,8 +109,14 @@ async function uploadToGCS(localPath: string, filename: string, mimetype: string
   return { gcsPath, signedUrl };
 }
 
+// RFC 5987 Content-Disposition filename encoding
+function contentDisposition(disposition: string, filename: string): string {
+  const encoded = encodeURIComponent(filename).replace(/['()]/g, escape);
+  return `${disposition}; filename="${filename.replace(/["\\\r\n]/g, '_')}"; filename*=UTF-8''${encoded}`;
+}
+
 // POST /files - Upload a file
-router.post('/', authMiddleware, upload.single('file'), async (req: AuthRequest, res: Response) => {
+router.post('/', authMiddleware, uploadLimiter, upload.single('file'), async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.userId;
     const file = req.file;
@@ -141,7 +167,7 @@ router.post('/', authMiddleware, upload.single('file'), async (req: AuthRequest,
     }
     const messageId = rawMessageId;
 
-    // If messageId is provided, verify user has access to the channel
+    // If messageId is provided, verify user owns the message and has channel access
     if (messageId) {
       const message = await prisma.message.findUnique({
         where: { id: messageId },
@@ -151,6 +177,13 @@ router.post('/', authMiddleware, upload.single('file'), async (req: AuthRequest,
         // Delete uploaded file
         fs.unlinkSync(file.path);
         res.status(404).json({ error: 'Message not found' });
+        return;
+      }
+
+      // Only the message author can attach files
+      if (message.userId !== userId) {
+        fs.unlinkSync(file.path);
+        res.status(403).json({ error: 'You can only attach files to your own messages' });
         return;
       }
 
@@ -180,8 +213,7 @@ router.post('/', authMiddleware, upload.single('file'), async (req: AuthRequest,
         console.error('GCS upload failed:', gcsError);
         // Clean up local temp file
         if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
-        const detail = gcsError instanceof Error ? gcsError.message : String(gcsError);
-        res.status(502).json({ error: `File storage unavailable: ${detail}` });
+        res.status(502).json({ error: 'File storage unavailable' });
         return;
       }
     } else {
@@ -245,13 +277,14 @@ router.get('/:id', authMiddleware, requireFileAccess, async (req: AuthRequest, r
   }
 });
 
-// POST /files/download-token - Issue a short-lived download token (not per-file)
+// POST /files/download-token - Issue a short-lived, file-scoped download token
 router.post('/download-token', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
+    const fileId = req.body?.fileId;
     const downloadToken = jwt.sign(
-      { userId: req.user!.userId, email: req.user!.email, purpose: 'file-download' },
+      { userId: req.user!.userId, purpose: 'file-download', ...(fileId && { fileId }) },
       JWT_SECRET,
-      { expiresIn: '5m' },
+      { algorithm: 'HS256', expiresIn: '5m' },
     );
     res.json({ token: downloadToken });
   } catch (error) {
@@ -265,13 +298,18 @@ router.get('/:id/download', (req: AuthRequest, res: Response, next) => {
   // Accept scoped download token via query parameter for <img>/<a> tags
   if (!req.headers.authorization && req.query.token) {
     try {
-      const payload = jwt.verify(req.query.token as string, JWT_SECRET) as any;
+      const payload = jwt.verify(req.query.token as string, JWT_SECRET, { algorithms: ['HS256'] }) as any;
       if (payload.purpose !== 'file-download') {
         res.status(403).json({ error: 'Invalid download token' });
         return;
       }
+      // If token is scoped to a file, verify it matches the requested file
+      if (payload.fileId && payload.fileId !== parseInt(req.params.id)) {
+        res.status(403).json({ error: 'Token not valid for this file' });
+        return;
+      }
       // Set user directly — authMiddleware rejects scoped tokens
-      req.user = { userId: payload.userId, email: payload.email, iat: payload.iat };
+      req.user = { userId: payload.userId };
     } catch {
       res.status(401).json({ error: 'Invalid or expired download token' });
       return;
@@ -288,13 +326,12 @@ router.get('/:id/download', (req: AuthRequest, res: Response, next) => {
 
     // GCS files: redirect to signed URL
     if (file.gcsPath && bucket) {
-      const safeName = file.originalName.replace(/["\\\r\n]/g, '_');
       const signedUrlOpts: any = {
         action: 'read',
         expires: Date.now() + 15 * 60 * 1000, // 15 min
       };
       if (req.query.dl === '1') {
-        signedUrlOpts.responseDisposition = `attachment; filename="${safeName}"`;
+        signedUrlOpts.responseDisposition = contentDisposition('attachment', file.originalName);
       }
       const [signedUrl] = await bucket.file(file.gcsPath).getSignedUrl(signedUrlOpts);
       res.redirect(signedUrl);
@@ -308,10 +345,12 @@ router.get('/:id/download', (req: AuthRequest, res: Response, next) => {
       return;
     }
 
-    const safeName = file.originalName.replace(/["\\\r\n]/g, '_');
-    const disposition = req.query.dl === '1' ? 'attachment' : 'inline';
+    // Force attachment for dangerous mimetypes (non-image/audio/video)
+    const forceAttachment = !INLINE_SAFE_TYPES.has(file.mimetype);
+    const disposition = (req.query.dl === '1' || forceAttachment) ? 'attachment' : 'inline';
+
     res.setHeader('Content-Type', file.mimetype);
-    res.setHeader('Content-Disposition', `${disposition}; filename="${safeName}"`);
+    res.setHeader('Content-Disposition', contentDisposition(disposition, file.originalName));
     res.setHeader('Accept-Ranges', 'bytes');
 
     const total = file.size;
@@ -320,13 +359,31 @@ router.get('/:id/download', (req: AuthRequest, res: Response, next) => {
       const parts = range.replace(/bytes=/, '').split('-');
       const start = parseInt(parts[0], 10);
       const end = parts[1] ? parseInt(parts[1], 10) : total - 1;
+
+      // Validate range bounds
+      if (start < 0 || end >= total || start > end || isNaN(start) || isNaN(end)) {
+        res.status(416).setHeader('Content-Range', `bytes */${total}`);
+        res.end();
+        return;
+      }
+
       res.status(206);
       res.setHeader('Content-Range', `bytes ${start}-${end}/${total}`);
       res.setHeader('Content-Length', end - start + 1);
-      fs.createReadStream(filePath, { start, end }).pipe(res);
+      const stream = fs.createReadStream(filePath, { start, end });
+      stream.on('error', (err) => {
+        console.error('File stream error:', err);
+        if (!res.headersSent) res.status(500).json({ error: 'Failed to read file' });
+      });
+      stream.pipe(res);
     } else {
       res.setHeader('Content-Length', total);
-      fs.createReadStream(filePath).pipe(res);
+      const stream = fs.createReadStream(filePath);
+      stream.on('error', (err) => {
+        console.error('File stream error:', err);
+        if (!res.headersSent) res.status(500).json({ error: 'Failed to read file' });
+      });
+      stream.pipe(res);
     }
   } catch (error) {
     console.error('Download file error:', error);
@@ -356,6 +413,12 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) =>
 
     if (file.userId !== userId) {
       res.status(403).json({ error: 'You can only delete your own files' });
+      return;
+    }
+
+    // Prevent deletion of files attached to messages
+    if (file.messageId) {
+      res.status(400).json({ error: 'Cannot delete a file that is attached to a message' });
       return;
     }
 

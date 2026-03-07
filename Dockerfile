@@ -13,7 +13,7 @@ FROM ${BASE_IMAGE} AS backend-build
 WORKDIR /app/backend
 COPY backend/ ./
 RUN npx prisma generate
-RUN npx tsc || true
+RUN npx tsc --noEmitOnError
 RUN test -f dist/index.js
 
 # ── Stage 3: Production image ────────────────────────────────────────

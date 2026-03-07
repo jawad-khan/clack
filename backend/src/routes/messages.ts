@@ -17,7 +17,7 @@ const createMessageSchema = z.object({
       { message: 'Message content cannot contain null bytes' }
     ),
   threadId: z.number().optional(),
-  fileIds: z.array(z.number()).optional(),
+  fileIds: z.array(z.number()).max(10).optional(),
 }).refine(
   (data) => (data.content?.trim().length ?? 0) > 0 || (data.fileIds && data.fileIds.length > 0),
   { message: 'Message must have content or file attachments' },
@@ -41,53 +41,41 @@ router.post('/:id/messages', authMiddleware, requireChannelMembership, async (re
       }
     }
 
-    // Validate fileIds belong to the user and are not already attached
-    if (fileIds && fileIds.length > 0) {
-      const files = await prisma.file.findMany({
-        where: {
-          id: { in: fileIds },
+    // Create message and atomically attach files in a transaction
+    const finalMessage = await prisma.$transaction(async (tx) => {
+      const msg = await tx.message.create({
+        data: {
+          content,
           userId,
-          messageId: null, // Only unattached files
+          channelId,
+          threadId,
         },
       });
 
-      if (files.length !== fileIds.length) {
-        res.status(400).json({ error: 'Invalid file IDs or files already attached' });
-        return;
+      if (fileIds && fileIds.length > 0) {
+        const updated = await tx.file.updateMany({
+          where: { id: { in: fileIds }, userId, messageId: null },
+          data: { messageId: msg.id },
+        });
+        if (updated.count !== fileIds.length) {
+          throw new Error('Invalid file IDs or files already attached');
+        }
       }
-    }
 
-    const message = await prisma.message.create({
-      data: {
-        content,
-        userId,
-        channelId,
-        threadId,
-      },
-      include: MESSAGE_INCLUDE_WITH_FILES,
-    });
-
-    // Attach files to the message
-    if (fileIds && fileIds.length > 0) {
-      await prisma.file.updateMany({
-        where: { id: { in: fileIds }, userId },
-        data: { messageId: message.id },
-      });
-
-      // Fetch updated message with files
-      const updatedMessage = await prisma.message.findUnique({
-        where: { id: message.id },
+      return tx.message.findUnique({
+        where: { id: msg.id },
         include: MESSAGE_INCLUDE_WITH_FILES,
       });
+    });
 
-      res.status(201).json(updatedMessage);
-      return;
-    }
-
-    res.status(201).json(message);
+    res.status(201).json(finalMessage);
   } catch (error) {
     if (error instanceof z.ZodError) {
       res.status(400).json({ error: error.issues });
+      return;
+    }
+    if (error instanceof Error && error.message.includes('Invalid file IDs')) {
+      res.status(400).json({ error: error.message });
       return;
     }
     console.error('Send message error:', error);

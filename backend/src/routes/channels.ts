@@ -229,31 +229,32 @@ router.post('/:id/leave', authMiddleware, requireChannelMembership, async (req: 
     const channelId = req.channelId!;
     const userId = req.user!.userId;
 
-    // Check if user is the last member
-    const memberCount = await prisma.channelMember.count({
-      where: { channelId },
-    });
+    // Wrap in transaction to avoid race condition on member count
+    const result = await prisma.$transaction(async (tx) => {
+      const memberCount = await tx.channelMember.count({ where: { channelId } });
 
-    if (memberCount <= 1) {
-      res.status(400).json({ error: 'Cannot leave channel as the last member' });
-      return;
-    }
+      if (memberCount <= 1) {
+        // Last member leaving — delete the channel (cascades to members)
+        await tx.channel.delete({ where: { id: channelId } });
+        return { deleted: true, memberCount: 0 };
+      }
 
-    await prisma.channelMember.delete({
-      where: {
-        userId_channelId: { userId, channelId },
-      },
-    });
-
-    // Broadcast to other channel members
-    const updatedCount = await prisma.channelMember.count({ where: { channelId } });
-    const io = getIO();
-    if (io) {
-      io.to(`channel:${channelId}`).emit('channel:member-left', {
-        channelId,
-        userId,
-        memberCount: updatedCount,
+      await tx.channelMember.delete({
+        where: { userId_channelId: { userId, channelId } },
       });
+      const updatedCount = await tx.channelMember.count({ where: { channelId } });
+      return { deleted: false, memberCount: updatedCount };
+    });
+
+    if (!result.deleted) {
+      const io = getIO();
+      if (io) {
+        io.to(`channel:${channelId}`).emit('channel:member-left', {
+          channelId,
+          userId,
+          memberCount: result.memberCount,
+        });
+      }
     }
 
     res.json({ message: 'Left channel successfully' });
@@ -296,14 +297,26 @@ router.get('/:id/members', authMiddleware, requireChannelMembership, async (req:
 });
 
 // POST /channels/:id/members - Add a user to a channel
+const addMemberSchema = z.object({
+  userId: z.number().int().positive(),
+});
+
 router.post('/:id/members', authMiddleware, requireChannelMembership, async (req: AuthRequest, res: Response) => {
   try {
     const channelId = req.channelId!;
-    const { userId } = req.body;
+    const { userId } = addMemberSchema.parse(req.body);
 
-    if (!userId || typeof userId !== 'number') {
-      res.status(400).json({ error: 'userId is required' });
-      return;
+    // For private channels, only the channel creator (first member) can add users
+    const channel = await prisma.channel.findUnique({ where: { id: channelId } });
+    if (channel?.isPrivate) {
+      const firstMember = await prisma.channelMember.findFirst({
+        where: { channelId },
+        orderBy: { joinedAt: 'asc' },
+      });
+      if (firstMember?.userId !== req.user!.userId) {
+        res.status(403).json({ error: 'Only the channel creator can add members to private channels' });
+        return;
+      }
     }
 
     // Check user exists
@@ -379,6 +392,15 @@ router.post('/:id/read', authMiddleware, requireChannelMembership, async (req: A
       return;
     }
 
+    // Prevent going backward — only advance the read position
+    const currentRead = await prisma.channelRead.findUnique({
+      where: { userId_channelId: { userId, channelId } },
+    });
+    if (currentRead?.lastReadMessageId && messageId < currentRead.lastReadMessageId) {
+      res.json({ success: true });
+      return;
+    }
+
     await prisma.channelRead.upsert({
       where: { userId_channelId: { userId, channelId } },
       create: { userId, channelId, lastReadMessageId: messageId },
@@ -406,6 +428,15 @@ router.post('/:id/unread', authMiddleware, requireChannelMembership, async (req:
     const channelId = req.channelId!;
     const userId = req.user!.userId;
     const { messageId } = markUnreadSchema.parse(req.body);
+
+    // Verify messageId belongs to this channel
+    const targetMessage = await prisma.message.findFirst({
+      where: { id: messageId, channelId, deletedAt: null },
+    });
+    if (!targetMessage) {
+      res.status(404).json({ error: 'Message not found in this channel' });
+      return;
+    }
 
     // Find the message just before this one in the channel
     const previousMessage = await prisma.message.findFirst({

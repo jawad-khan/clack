@@ -22,6 +22,44 @@ interface AuthenticatedSocket extends Socket {
 // Track online users: Map<userId, Set<socketId>>
 const onlineUsers = new Map<number, Set<string>>();
 
+// Per-socket rate limiting
+const RATE_LIMITS: Record<string, { max: number; windowMs: number }> = {
+  'message:send': { max: 30, windowMs: 60_000 },
+  'dm:send': { max: 30, windowMs: 60_000 },
+  'message:edit': { max: 20, windowMs: 60_000 },
+  'message:delete': { max: 20, windowMs: 60_000 },
+  'typing:start': { max: 60, windowMs: 60_000 },
+  'typing:stop': { max: 60, windowMs: 60_000 },
+  'dm:typing:start': { max: 60, windowMs: 60_000 },
+  'dm:typing:stop': { max: 60, windowMs: 60_000 },
+};
+
+const rateLimitState = new Map<string, { count: number; resetAt: number }>();
+
+function checkRateLimit(socketId: string, event: string): boolean {
+  const config = RATE_LIMITS[event];
+  if (!config) return true;
+
+  const key = `${socketId}:${event}`;
+  const now = Date.now();
+  const entry = rateLimitState.get(key);
+
+  if (!entry || now >= entry.resetAt) {
+    rateLimitState.set(key, { count: 1, resetAt: now + config.windowMs });
+    return true;
+  }
+
+  if (entry.count >= config.max) return false;
+  entry.count++;
+  return true;
+}
+
+function clearRateLimitState(socketId: string) {
+  for (const key of rateLimitState.keys()) {
+    if (key.startsWith(`${socketId}:`)) rateLimitState.delete(key);
+  }
+}
+
 // Get users who share channels or DMs with the given user (single query)
 async function getSharedUsers(userId: number): Promise<number[]> {
   const rows = await prisma.$queryRaw<Array<{ userId: number }>>`
@@ -33,7 +71,8 @@ async function getSharedUsers(userId: number): Promise<number[]> {
       UNION
       SELECT CASE WHEN "fromUserId" = ${userId} THEN "toUserId" ELSE "fromUserId" END AS "userId"
       FROM "DirectMessage"
-      WHERE "fromUserId" = ${userId} OR "toUserId" = ${userId}
+      WHERE ("fromUserId" = ${userId} OR "toUserId" = ${userId})
+        AND "deletedAt" IS NULL
     ) shared
   `;
   return rows.map((r) => r.userId);
@@ -45,6 +84,9 @@ export function initializeWebSocket(httpServer: HttpServer) {
       origin: process.env.CORS_ORIGIN || (process.env.NODE_ENV === 'production' ? false : '*'),
       methods: ['GET', 'POST'],
     },
+    maxHttpBufferSize: 16384,
+    pingTimeout: 20000,
+    pingInterval: 25000,
   });
 
   // Store module-level reference so REST routes can broadcast events
@@ -59,7 +101,11 @@ export function initializeWebSocket(httpServer: HttpServer) {
     }
 
     try {
-      const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
+      const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as JwtPayload & { purpose?: string };
+      // Reject scoped tokens (e.g. file-download) from being used as WS auth
+      if (decoded.purpose) {
+        return next(new Error('Invalid token'));
+      }
       socket.user = decoded;
       next();
     } catch (error) {
@@ -70,7 +116,7 @@ export function initializeWebSocket(httpServer: HttpServer) {
   io.on('connection', async (socket: AuthenticatedSocket) => {
     console.log(`User ${socket.user?.userId} connected`);
 
-    // Per-socket cache for channel membership (avoids DB query on every typing event)
+    // Per-socket cache for channel membership (only cache positive results)
     const membershipCache = new Map<number, { result: boolean; expires: number }>();
     const MEMBERSHIP_CACHE_TTL = 30_000; // 30 seconds
 
@@ -78,7 +124,10 @@ export function initializeWebSocket(httpServer: HttpServer) {
       const cached = membershipCache.get(channelId);
       if (cached && Date.now() < cached.expires) return cached.result;
       const result = await checkChannelMembership(userId, channelId);
-      membershipCache.set(channelId, { result, expires: Date.now() + MEMBERSHIP_CACHE_TTL });
+      // Only cache positive (truthy) results to avoid unbounded growth from negative lookups
+      if (result) {
+        membershipCache.set(channelId, { result, expires: Date.now() + MEMBERSHIP_CACHE_TTL });
+      }
       return result;
     }
 
@@ -149,6 +198,10 @@ export function initializeWebSocket(httpServer: HttpServer) {
     // Send message
     socket.on('message:send', async (rawData: unknown) => {
       if (!socket.user) return;
+      if (!checkRateLimit(socket.id, 'message:send')) {
+        socket.emit('error', { message: 'Rate limit exceeded' });
+        return;
+      }
 
       try {
         const parsed = wsMessageSendSchema.safeParse(rawData);
@@ -163,6 +216,17 @@ export function initializeWebSocket(httpServer: HttpServer) {
         if (!isMember) {
           socket.emit('error', { message: 'You must join the channel to send messages' });
           return;
+        }
+
+        // Validate threadId belongs to the same channel
+        if (data.threadId) {
+          const parentMessage = await prisma.message.findUnique({
+            where: { id: data.threadId },
+          });
+          if (!parentMessage || parentMessage.channelId !== data.channelId) {
+            socket.emit('error', { message: 'Thread parent must belong to the same channel' });
+            return;
+          }
         }
 
         // Create message and atomically attach files in a transaction
@@ -207,6 +271,10 @@ export function initializeWebSocket(httpServer: HttpServer) {
     // Edit message
     socket.on('message:edit', async (rawData: unknown) => {
       if (!socket.user) return;
+      if (!checkRateLimit(socket.id, 'message:edit')) {
+        socket.emit('error', { message: 'Rate limit exceeded' });
+        return;
+      }
 
       try {
         const parsed = wsMessageEditSchema.safeParse(rawData);
@@ -252,6 +320,10 @@ export function initializeWebSocket(httpServer: HttpServer) {
     // Delete message
     socket.on('message:delete', async (rawData: unknown) => {
       if (!socket.user) return;
+      if (!checkRateLimit(socket.id, 'message:delete')) {
+        socket.emit('error', { message: 'Rate limit exceeded' });
+        return;
+      }
 
       try {
         const parsed = wsMessageDeleteSchema.safeParse(rawData);
@@ -296,6 +368,8 @@ export function initializeWebSocket(httpServer: HttpServer) {
     // Typing indicator (uses cached membership to avoid DB query per keystroke)
     socket.on('typing:start', async (rawChannelId: unknown) => {
       if (!socket.user) return;
+      if (!checkRateLimit(socket.id, 'typing:start')) return;
+
       const parsed = wsChannelIdSchema.safeParse(rawChannelId);
       if (!parsed.success) return;
       const channelId = parsed.data;
@@ -310,6 +384,8 @@ export function initializeWebSocket(httpServer: HttpServer) {
 
     socket.on('typing:stop', async (rawChannelId: unknown) => {
       if (!socket.user) return;
+      if (!checkRateLimit(socket.id, 'typing:stop')) return;
+
       const parsed = wsChannelIdSchema.safeParse(rawChannelId);
       if (!parsed.success) return;
       const channelId = parsed.data;
@@ -379,6 +455,10 @@ export function initializeWebSocket(httpServer: HttpServer) {
     // Send DM via WebSocket
     socket.on('dm:send', async (rawData: unknown) => {
       if (!socket.user) return;
+      if (!checkRateLimit(socket.id, 'dm:send')) {
+        socket.emit('error', { message: 'Rate limit exceeded' });
+        return;
+      }
 
       try {
         const parsed = wsDmSendSchema.safeParse(rawData);
@@ -424,23 +504,53 @@ export function initializeWebSocket(httpServer: HttpServer) {
       }
     });
 
-    // DM typing indicator
-    socket.on('dm:typing:start', (rawToUserId: unknown) => {
+    // DM typing indicator — verify DM conversation exists before emitting
+    socket.on('dm:typing:start', async (rawToUserId: unknown) => {
       if (!socket.user) return;
+      if (!checkRateLimit(socket.id, 'dm:typing:start')) return;
+
       const parsed = wsUserIdSchema.safeParse(rawToUserId);
       if (!parsed.success) return;
       const toUserId = parsed.data;
+
+      // Verify DM conversation exists between users
+      const hasDm = await prisma.directMessage.findFirst({
+        where: {
+          OR: [
+            { fromUserId: socket.user.userId, toUserId },
+            { fromUserId: toUserId, toUserId: socket.user.userId },
+          ],
+          deletedAt: null,
+        },
+        select: { id: true },
+      });
+      if (!hasDm) return;
 
       io.to(`user:${toUserId}`).emit('dm:typing:start', {
         userId: socket.user.userId,
       });
     });
 
-    socket.on('dm:typing:stop', (rawToUserId: unknown) => {
+    socket.on('dm:typing:stop', async (rawToUserId: unknown) => {
       if (!socket.user) return;
+      if (!checkRateLimit(socket.id, 'dm:typing:stop')) return;
+
       const parsed = wsUserIdSchema.safeParse(rawToUserId);
       if (!parsed.success) return;
       const toUserId = parsed.data;
+
+      // Verify DM conversation exists between users
+      const hasDm = await prisma.directMessage.findFirst({
+        where: {
+          OR: [
+            { fromUserId: socket.user.userId, toUserId },
+            { fromUserId: toUserId, toUserId: socket.user.userId },
+          ],
+          deletedAt: null,
+        },
+        select: { id: true },
+      });
+      if (!hasDm) return;
 
       io.to(`user:${toUserId}`).emit('dm:typing:stop', {
         userId: socket.user.userId,
@@ -450,10 +560,13 @@ export function initializeWebSocket(httpServer: HttpServer) {
     socket.on('disconnect', async () => {
       console.log(`User ${socket.user?.userId} disconnected`);
 
+      // Clean up rate limit state for this socket
+      clearRateLimitState(socket.id);
+
       if (socket.user) {
         const userId = socket.user.userId;
 
-        // Remove socket from user's connections
+        // Remove socket from user's connections (always, before any async work)
         const userSockets = onlineUsers.get(userId);
         if (userSockets) {
           userSockets.delete(socket.id);
