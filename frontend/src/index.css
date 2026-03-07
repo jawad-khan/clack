@@ -206,18 +206,3 @@ body {
   text-decoration: underline;
 }
 
-/* Hide volume and overflow menu on voice note audio players */
-.voice-note-audio::-webkit-media-controls-volume-button,
-.voice-note-audio::-webkit-media-controls-mute-button,
-.voice-note-audio::-webkit-media-controls-volume-slider {
-  display: none !important;
-}
-
-/* Clip voice note audio to hide volume icon and three-dot menu via overflow */
-.voice-note-audio-wrap {
-  overflow: hidden;
-  width: 200px;
-}
-.voice-note-audio-wrap audio {
-  width: 260px;
-}

@@ -181,15 +181,13 @@ export function Message({ message, showAvatar, isCompact, onOpenThread }: Messag
               >
                 {file.mimetype.startsWith('audio/') || (file.mimetype === 'video/webm' && file.originalName.startsWith('voice-message')) ? (
                   <div className="px-3 py-2.5">
-                    <div className="voice-note-audio-wrap">
-                      <audio
-                        controls
-                        controlsList="nodownload noplaybackrate"
-                        preload="auto"
-                        className="h-8 voice-note-audio"
-                        src={getAuthFileUrl(file.url)}
-                      />
-                    </div>
+                    <audio
+                      controls
+                      controlsList="nodownload noplaybackrate"
+                      preload="auto"
+                      className="h-8"
+                      src={getAuthFileUrl(file.url)}
+                    />
                   </div>
                 ) : file.mimetype.startsWith('image/') ? (
                   <div>
