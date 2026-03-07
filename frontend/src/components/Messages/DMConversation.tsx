@@ -5,7 +5,6 @@ import {
   FileText,
   X,
   Star,
-  MoreVertical,
   MessageSquare,
 } from 'lucide-react';
 import { Avatar } from '@/components/ui/avatar';
@@ -16,6 +15,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useMessageEdit } from '@/hooks/useMessageEdit';
 import { useProfileStore } from '@/stores/useProfileStore';
+import { useBookmarkStore } from '@/stores/useBookmarkStore';
 import { MessageToolbar } from './MessageToolbar';
 import { MessageActionsMenu } from './MessageActionsMenu';
 import { MessageInput } from './MessageInput';
@@ -61,14 +61,14 @@ export function DMConversation({ userId, userName, userAvatar }: DMConversationP
   const [showFiles, setShowFiles] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [isStarred, setIsStarred] = useState(false);
-  const [showHeaderMenu, setShowHeaderMenu] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const hoverLeaveTimer = useRef<ReturnType<typeof setTimeout>>();
-  const menuRef = useRef<HTMLDivElement>(null);
   const currentUser = useAuthStore((s) => s.user);
   const isSelf = userId === currentUser?.id;
   const dmEntry = useChannelStore((s) => s.directMessages.find((d) => d.userId === userId));
   const openProfile = useProfileStore((s) => s.openProfile);
+  const toggleBookmark = useBookmarkStore((s) => s.toggle);
+  const bookmarkedIds = useBookmarkStore((s) => s.bookmarkedIds);
   const {
     editingId, editContent, setEditContent, editInputRef,
     startEdit, cancelEdit, saveEdit, handleEditKeyDown,
@@ -83,19 +83,6 @@ export function DMConversation({ userId, userName, userAvatar }: DMConversationP
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages.length]);
-
-  // Close header menu when clicking outside
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setShowHeaderMenu(false);
-      }
-    }
-    if (showHeaderMenu) {
-      document.addEventListener('mousedown', handleClick);
-      return () => document.removeEventListener('mousedown', handleClick);
-    }
-  }, [showHeaderMenu]);
 
   const handleStartEdit = (msg: { id: number; content: string }) => {
     startEdit(msg.id, msg.content);
@@ -175,21 +162,6 @@ export function DMConversation({ userId, userName, userAvatar }: DMConversationP
             <HeaderNotifications testIdPrefix="dm" />
             <div className="h-4 w-px bg-slack-border" />
             <HeaderSearch testIdPrefix="dm" />
-            <div className="relative" ref={menuRef}>
-              <Button
-                variant="toolbar"
-                size="icon-xs"
-                data-testid="dm-header-menu"
-                onClick={() => setShowHeaderMenu((v) => !v)}
-              >
-                <MoreVertical className="h-4 w-4 text-slack-secondary" />
-              </Button>
-              {showHeaderMenu && (
-                <div className="absolute right-0 top-7 z-50 min-w-[160px] rounded-lg border border-slack-border bg-white shadow-lg py-1">
-                  <p className="px-3 py-2 text-[13px] text-slack-hint">No actions available</p>
-                </div>
-              )}
-            </div>
           </div>
         </div>
         {/* Tabs Row */}
@@ -354,6 +326,8 @@ export function DMConversation({ userId, userName, userAvatar }: DMConversationP
                           <MessageToolbar
                             className="absolute -top-4 right-2"
                             testIdPrefix="dm"
+                            onBookmarkClick={() => toggleBookmark(msg.id)}
+                            isBookmarked={bookmarkedIds.has(msg.id)}
                             onThreadClick={() => handleOpenThread(msg.id)}
                             onMoreClick={isOwner ? () =>
                               setShowMoreMenuId((prev) =>
