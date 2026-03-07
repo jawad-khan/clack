@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
 interface MessageToolbarProps {
-  onEmojiClick: () => void;
+  onEmojiClick?: () => void;
   onThreadClick?: () => void;
   onBookmarkClick?: () => void;
   isBookmarked?: boolean;
@@ -29,15 +29,17 @@ export function MessageToolbar({
         className,
       )}
     >
-      <Button
-        variant="toolbar"
-        size="icon-sm"
-        data-testid={testIdPrefix ? `${testIdPrefix}-emoji-btn` : undefined}
-        title="Add reaction"
-        onClick={onEmojiClick}
-      >
-        <Smile className="h-4 w-4 text-slack-secondary" />
-      </Button>
+      {onEmojiClick && (
+        <Button
+          variant="toolbar"
+          size="icon-sm"
+          data-testid={testIdPrefix ? `${testIdPrefix}-emoji-btn` : undefined}
+          title="Add reaction"
+          onClick={onEmojiClick}
+        >
+          <Smile className="h-4 w-4 text-slack-secondary" />
+        </Button>
+      )}
       {onThreadClick && (
         <Button
           variant="toolbar"

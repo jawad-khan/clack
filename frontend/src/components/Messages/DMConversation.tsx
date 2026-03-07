@@ -9,7 +9,6 @@ import {
   MessageSquare,
 } from 'lucide-react';
 import { Avatar } from '@/components/ui/avatar';
-import { PortalEmojiPicker } from '@/components/ui/emoji-picker';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useDMStore } from '@/stores/useDMStore';
 import { useChannelStore } from '@/stores/useChannelStore';
@@ -57,7 +56,6 @@ export function DMConversation({ userId, userName, userAvatar }: DMConversationP
   const [activeThreadId, setActiveThreadId] = useState<number | null>(null);
   const [hoveredMessageId, setHoveredMessageId] = useState<number | null>(null);
   const [showMoreMenuId, setShowMoreMenuId] = useState<number | null>(null);
-  const [showEmojiPickerId, setShowEmojiPickerId] = useState<number | null>(null);
   const [showPins, setShowPins] = useState(false);
   const [showFiles, setShowFiles] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
@@ -115,7 +113,7 @@ export function DMConversation({ userId, userName, userAvatar }: DMConversationP
   };
 
   const keepToolbarOpen = (msgId: number) =>
-    showMoreMenuId === msgId || showEmojiPickerId === msgId || editingId === msgId;
+    showMoreMenuId === msgId || editingId === msgId;
 
   const handleOpenThread = useCallback((messageId: number) => {
     setActiveThreadId(messageId);
@@ -355,11 +353,6 @@ export function DMConversation({ userId, userName, userAvatar }: DMConversationP
                           <MessageToolbar
                             className="absolute -top-4 right-2"
                             testIdPrefix="dm"
-                            onEmojiClick={() =>
-                              setShowEmojiPickerId((prev) =>
-                                prev === msg.id ? null : msg.id,
-                              )
-                            }
                             onThreadClick={() => handleOpenThread(msg.id)}
                             onMoreClick={isOwner ? () =>
                               setShowMoreMenuId((prev) =>
@@ -380,17 +373,6 @@ export function DMConversation({ userId, userName, userAvatar }: DMConversationP
                           />
                         )}
 
-                        {/* Emoji picker */}
-                        {showEmojiPickerId === msg.id && (
-                          <PortalEmojiPicker
-                            anchorClassName="absolute -top-4 right-2 mt-9"
-                            onEmojiSelect={(_emoji) => {
-                              // Reactions on DMs not supported by backend yet
-                              setShowEmojiPickerId(null);
-                            }}
-                            onClickOutside={() => setShowEmojiPickerId(null)}
-                          />
-                        )}
                       </div>
                     </div>
                   );
