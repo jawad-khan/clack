@@ -350,3 +350,28 @@ export const wsDmSendSchema = z.object({
 export const wsChannelIdSchema = z.number().int().positive();
 
 export const wsUserIdSchema = z.number().int().positive();
+
+// ── Huddle Schemas ───────────────────────────────────────────────────
+
+export const wsHuddleJoinSchema = z.object({
+  channelId: z.number().int().positive(),
+});
+
+export const wsHuddleLeaveSchema = z.object({
+  channelId: z.number().int().positive(),
+});
+
+export const wsHuddleMuteSchema = z.object({
+  channelId: z.number().int().positive(),
+  isMuted: z.boolean(),
+});
+
+export const wsHuddleSignalSchema = z.object({
+  channelId: z.number().int().positive(),
+  toUserId: z.number().int().positive(),
+  signal: z.object({
+    type: z.enum(['offer', 'answer', 'ice-candidate']),
+    sdp: z.string().optional(),
+    candidate: z.unknown().optional(),
+  }),
+});

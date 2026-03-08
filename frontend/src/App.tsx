@@ -6,6 +6,7 @@ import { useMessageStore } from '@/stores/useMessageStore';
 import { useDMStore } from '@/stores/useDMStore';
 import { useBookmarkStore } from '@/stores/useBookmarkStore';
 import { connectSocket, disconnectSocket, getSocket } from '@/lib/socket';
+import { useHuddleStore, setHuddleUserId } from '@/stores/useHuddleStore';
 import { AppLayout } from '@/components/Layout/AppLayout';
 import { LoginPage } from '@/components/Auth/LoginPage';
 import { RegisterPage } from '@/components/Auth/RegisterPage';
@@ -159,6 +160,10 @@ function AppShell() {
       return;
     }
 
+    // Set user ID for huddle store
+    const currentUserId = useAuthStore.getState().user?.id;
+    if (currentUserId) setHuddleUserId(currentUserId);
+
     const handleNewMessage = (msg: import('@/lib/api').ApiMessage) => {
       const { onMessageNew } = useMessageStore.getState();
       const { activeChannelId, incrementUnread } = useChannelStore.getState();
@@ -296,8 +301,33 @@ function AppShell() {
     socket.on('reaction:added', handleReactionAdded);
     socket.on('reaction:removed', handleReactionRemoved);
 
+    // Huddle events
+    const handleHuddleState = (data: { channelId: number; participants: import('@/stores/useHuddleStore').HuddleParticipant[] }) =>
+      useHuddleStore.getState().onHuddleState(data);
+    const handleHuddleActive = (data: { channelId: number; participantCount: number; participants: import('@/stores/useHuddleStore').HuddleParticipant[] }) =>
+      useHuddleStore.getState().onHuddleActive(data);
+    const handleParticipantJoined = (data: { channelId: number; participant: import('@/stores/useHuddleStore').HuddleParticipant }) =>
+      useHuddleStore.getState().onParticipantJoined(data);
+    const handleParticipantLeft = (data: { channelId: number; userId: number }) =>
+      useHuddleStore.getState().onParticipantLeft(data);
+    const handleHuddleMuteChanged = (data: { channelId: number; userId: number; isMuted: boolean }) =>
+      useHuddleStore.getState().onMuteChanged(data);
+    const handleHuddleSignal = (data: { channelId: number; fromUserId: number; signal: { type: string; sdp?: string; candidate?: unknown } }) =>
+      useHuddleStore.getState().onSignal(data);
+    const handleHuddleEnded = (data: { channelId: number }) =>
+      useHuddleStore.getState().onHuddleEnded(data);
+
+    socket.on('huddle:state', handleHuddleState);
+    socket.on('huddle:active', handleHuddleActive);
+    socket.on('huddle:participant-joined', handleParticipantJoined);
+    socket.on('huddle:participant-left', handleParticipantLeft);
+    socket.on('huddle:mute-changed', handleHuddleMuteChanged);
+    socket.on('huddle:signal', handleHuddleSignal);
+    socket.on('huddle:ended', handleHuddleEnded);
+
     const handleDisconnect = () => {
       joinedChannelsRef.current.clear();
+      useHuddleStore.getState().cleanup();
     };
     socket.on('disconnect', handleDisconnect);
 
@@ -320,7 +350,15 @@ function AppShell() {
       socket.off('channel:unarchived', handleChannelUnarchived);
       socket.off('reaction:added', handleReactionAdded);
       socket.off('reaction:removed', handleReactionRemoved);
+      socket.off('huddle:state', handleHuddleState);
+      socket.off('huddle:active', handleHuddleActive);
+      socket.off('huddle:participant-joined', handleParticipantJoined);
+      socket.off('huddle:participant-left', handleParticipantLeft);
+      socket.off('huddle:mute-changed', handleHuddleMuteChanged);
+      socket.off('huddle:signal', handleHuddleSignal);
+      socket.off('huddle:ended', handleHuddleEnded);
       socket.off('disconnect', handleDisconnect);
+      useHuddleStore.getState().cleanup();
       disconnectSocket();
     };
   }, []);

@@ -27,6 +27,7 @@ import type { Channel } from '@/lib/types';
 import { getChannels } from '@/lib/api';
 import type { AuthUser } from '@/lib/api';
 import { useMobileStore } from '@/stores/useMobileStore';
+import { HuddleBar } from '@/components/Huddle/HuddleBar';
 
 const navItems = [
   { icon: MessageSquare, label: 'DMs', id: 'dms' },
@@ -364,6 +365,8 @@ export function Sidebar() {
             )}
           </div>
         </div>
+        {/* Huddle bar at bottom of sidebar */}
+        <HuddleBar />
       </div>
 
       {/* Add Channel Dialog (Create + Browse) */}

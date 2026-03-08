@@ -11,6 +11,7 @@ import { HeaderSearch } from './HeaderSearch';
 import { HeaderNotifications } from './HeaderNotifications';
 import { HeaderTabs } from './HeaderTabs';
 import { useMobileStore } from '@/stores/useMobileStore';
+import { HuddleButton } from '@/components/Huddle/HuddleButton';
 
 interface MessageHeaderProps {
   channel: Channel;
@@ -138,6 +139,9 @@ export function MessageHeader({ channel, showMembers, onToggleMembers, onToggleP
             ) : null}
             <span>{channel.memberCount}</span>
           </button>
+          {!readOnly && (
+            <HuddleButton channelId={channel.id} />
+          )}
           <div className="hidden sm:block h-4 w-px bg-slack-border" />
           <div className="hidden sm:block">
             <HeaderNotifications excludeChannelId={channel.id} />

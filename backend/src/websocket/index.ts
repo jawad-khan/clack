@@ -15,6 +15,7 @@ import {
 } from '../middleware/authorize.js';
 import { USER_SELECT_BASIC, MESSAGE_INCLUDE_WITH_FILES, DM_INCLUDE_USERS } from '../db/selects.js';
 import { logError } from '../utils/logger.js';
+import { registerHuddleHandlers, handleHuddleDisconnect } from './huddles.js';
 
 interface AuthenticatedSocket extends Socket {
   user?: JwtPayload;
@@ -35,6 +36,10 @@ const RATE_LIMITS: Record<string, { max: number; windowMs: number }> = {
   'dm:typing:stop': { max: 60, windowMs: 60_000 },
   'join:channel': { max: 20, windowMs: 60_000 },
   'dm:join': { max: 20, windowMs: 60_000 },
+  'huddle:join': { max: 10, windowMs: 60_000 },
+  'huddle:leave': { max: 10, windowMs: 60_000 },
+  'huddle:mute': { max: 30, windowMs: 60_000 },
+  'huddle:signal': { max: 200, windowMs: 60_000 },
 };
 
 const rateLimitState = new Map<string, { count: number; resetAt: number }>();
@@ -618,8 +623,12 @@ export function initializeWebSocket(httpServer: HttpServer) {
       });
     });
 
+    // Register huddle handlers
+    registerHuddleHandlers(io, socket as AuthenticatedSocket, onlineUsers, checkRateLimit);
+
     socket.on('disconnect', async () => {
       console.log(`User ${socket.user?.userId} disconnected`);
+      handleHuddleDisconnect(socket as AuthenticatedSocket, io);
 
       if (socket.user) {
         const userId = socket.user.userId;
