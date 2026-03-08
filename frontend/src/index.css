@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* Force light mode — app does not support dark mode */
+:root {
+  color-scheme: light only;
+}
+
 /* Lato font - Slack uses Slack-Lato which is based on Lato */
 @font-face {
   font-family: 'Lato';
