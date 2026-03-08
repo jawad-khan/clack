@@ -8,18 +8,16 @@ interface ThreadParticipant {
 
 interface ThreadIndicatorProps {
   replyCount: number;
-  author: ThreadParticipant;
+  author?: ThreadParticipant;
   participants?: ThreadParticipant[];
   onClick: () => void;
   testId?: string;
 }
 
-export function ThreadIndicator({ replyCount, author, participants = [], onClick, testId }: ThreadIndicatorProps) {
-  // Deduplicate: author first, then participants
+export function ThreadIndicator({ replyCount, participants = [], onClick, testId }: ThreadIndicatorProps) {
+  // Show only repliers (deduplicated) — author is already visible as message sender
   const seen = new Set<number>();
   const allParticipants: ThreadParticipant[] = [];
-  seen.add(author.id);
-  allParticipants.push(author);
   for (const p of participants) {
     if (!seen.has(p.id)) {
       seen.add(p.id);
