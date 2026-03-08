@@ -10,8 +10,8 @@ import { logError } from '../utils/logger.js';
 
 const router = Router();
 
-// Matches either a Unicode emoji sequence or a :shortcode: format
-const emojiShortcodeRegex = /^:[a-z0-9_+-]+:$/;
+// Matches either a Unicode emoji sequence or a shortcode (with or without colons)
+const emojiShortcodeRegex = /^:?[a-z0-9_+-]+:?$/;
 const unicodeEmojiRegex = /^\p{Extended_Pictographic}(\u200d\p{Extended_Pictographic}|\uFE0F)*$/u;
 
 const reactionSchema = z.object({

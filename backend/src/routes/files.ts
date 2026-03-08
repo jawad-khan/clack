@@ -41,7 +41,7 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage,
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB limit
+    fileSize: 1024 * 1024 * 1024, // 1GB limit
   },
   fileFilter: (req, file, cb) => {
     // Allow common file types
@@ -66,7 +66,13 @@ const upload = multer({
       'video/webm',
       'video/quicktime',
     ];
-    if (allowedMimes.includes(file.mimetype)) {
+    // Accept application/octet-stream for video extensions (browsers/clients
+    // sometimes don't set the correct MIME); magic-byte validation later
+    // will verify the actual content.
+    const videoExts = new Set(['.mp4', '.webm', '.mov', '.mkv']);
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowedMimes.includes(file.mimetype) ||
+        (file.mimetype === 'application/octet-stream' && videoExts.has(ext))) {
       cb(null, true);
     } else {
       cb(new Error('File type not allowed'));
@@ -124,7 +130,23 @@ function contentDisposition(disposition: string, filename: string): string {
 }
 
 // POST /files - Upload a file
-router.post('/', authMiddleware, uploadLimiter, upload.single('file'), async (req: AuthRequest, res: Response) => {
+router.post('/', authMiddleware, uploadLimiter, (req: AuthRequest, res: Response, next: NextFunction) => {
+  upload.single('file')(req, res, (err: any) => {
+    if (err) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        res.status(413).json({ error: 'File is too large. Maximum file size is 1 GB.' });
+        return;
+      }
+      if (err.message === 'File type not allowed') {
+        res.status(400).json({ error: 'File type not allowed' });
+        return;
+      }
+      res.status(400).json({ error: err.message || 'Upload failed' });
+      return;
+    }
+    next();
+  });
+}, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.userId;
     const file = req.file;
@@ -141,7 +163,7 @@ router.post('/', authMiddleware, uploadLimiter, upload.single('file'), async (re
       'image/jpeg', 'image/png', 'image/gif', 'image/webp',
       'application/pdf', 'application/zip',
       'audio/mpeg', 'audio/ogg', 'audio/mp4', 'audio/webm',
-      'video/webm', // file-type detects WebM container as video/webm
+      'video/mp4', 'video/webm', 'video/quicktime',
     ]);
     // Text/JSON files have no magic bytes — allow if client claimed text/plain or application/json
     const textTypes = new Set(['text/plain', 'application/json']);

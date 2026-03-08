@@ -205,9 +205,10 @@ export function useQuillEditor({
               const uploaded = await uploadFile(file);
               setPendingFiles((prev) => [...prev, uploaded]);
             }
-          } catch {
-            setUploadError('Failed to upload pasted image. Please try again.');
-            setTimeout(() => setUploadError(null), 4000);
+          } catch (err: any) {
+            const msg = err?.message || 'Failed to upload pasted image. Please try again.';
+            setUploadError(msg);
+            setTimeout(() => setUploadError(null), 5000);
           } finally {
             setIsUploading(false);
           }
@@ -335,9 +336,10 @@ export function useQuillEditor({
         const uploaded = await uploadFile(file);
         setPendingFiles((prev) => [...prev, uploaded]);
       }
-    } catch {
-      setUploadError('Failed to upload file. Please try again.');
-      setTimeout(() => setUploadError(null), 4000);
+    } catch (err: any) {
+      const msg = err?.message || 'Failed to upload file. Please try again.';
+      setUploadError(msg);
+      setTimeout(() => setUploadError(null), 5000);
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) {

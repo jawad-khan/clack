@@ -51,20 +51,26 @@ export function MessageReactions({ reactions, messageId, onAddReaction, onRemove
           ? `${names.join(', ')} reacted with ${shortcodeToNative(reaction.emoji)}`
           : undefined;
         return (
-          <button
-            key={reaction.emoji}
-            onClick={() => handleReactionClick(reaction.emoji, hasReacted)}
-            title={tooltip}
-            className={cn(
-              'inline-flex h-[22px] items-center gap-1 rounded-[12px] border px-[6px] text-[12px] transition-colors',
-              hasReacted
-                ? 'border-slack-link bg-slack-highlight text-slack-link'
-                : 'border-slack-border bg-white text-slack-primary hover:bg-slack-hover'
+          <div key={reaction.emoji} className="group/reaction relative">
+            <button
+              onClick={() => handleReactionClick(reaction.emoji, hasReacted)}
+              className={cn(
+                'inline-flex h-[22px] items-center gap-1 rounded-[12px] border px-[6px] text-[12px] transition-colors',
+                hasReacted
+                  ? 'border-slack-link bg-slack-highlight text-slack-link'
+                  : 'border-slack-border bg-white text-slack-primary hover:bg-slack-hover'
+              )}
+            >
+              <span data-testid="reaction-emoji" className="text-sm leading-none">{shortcodeToNative(reaction.emoji)}</span>
+              <span className="text-[13px] font-medium">{reaction.count}</span>
+            </button>
+            {tooltip && (
+              <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2.5 py-1.5 text-xs text-white shadow-lg group-hover/reaction:block">
+                {tooltip}
+                <div className="absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
+              </div>
             )}
-          >
-            <span data-testid="reaction-emoji" className="text-sm leading-none">{shortcodeToNative(reaction.emoji)}</span>
-            <span className="text-[13px] font-medium">{reaction.count}</span>
-          </button>
+          </div>
         );
       })}
       <button
