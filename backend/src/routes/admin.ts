@@ -8,6 +8,7 @@ import { AuthRequest } from '../types.js';
 import { getIO, kickUser } from '../websocket/index.js';
 import { parseIntParam } from '../utils/params.js';
 import { logError } from '../utils/logger.js';
+import { writeAuditLog } from '../utils/auditLog.js';
 
 const router = Router();
 
@@ -80,6 +81,15 @@ router.patch('/users/:id', async (req: AuthRequest, res: Response) => {
       select: ADMIN_USER_SELECT,
     });
 
+    writeAuditLog({
+      action: 'user.role_changed',
+      actorId: req.user!.userId,
+      targetType: 'user',
+      targetId: userId,
+      targetName: updated.name,
+      details: `Role changed from ${target.role} to ${role}`,
+    });
+
     res.json(updated);
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -131,6 +141,14 @@ router.post('/users/:id/deactivate', async (req: AuthRequest, res: Response) => 
 
     kickUser(userId);
 
+    writeAuditLog({
+      action: 'user.deactivated',
+      actorId: req.user!.userId,
+      targetType: 'user',
+      targetId: userId,
+      targetName: updated.name,
+    });
+
     res.json(updated);
   } catch (error) {
     logError('Admin deactivate user error', error);
@@ -160,6 +178,14 @@ router.post('/users/:id/reactivate', async (req: AuthRequest, res: Response) => 
       where: { id: userId },
       data: { deactivatedAt: null },
       select: ADMIN_USER_SELECT,
+    });
+
+    writeAuditLog({
+      action: 'user.reactivated',
+      actorId: req.user!.userId,
+      targetType: 'user',
+      targetId: userId,
+      targetName: updated.name,
     });
 
     res.json(updated);
@@ -211,6 +237,14 @@ router.post('/invites', async (req: AuthRequest, res: Response) => {
       },
     });
 
+    writeAuditLog({
+      action: 'invite.created',
+      actorId: req.user!.userId,
+      targetType: 'invite',
+      targetId: invite.id,
+      details: `Role: ${role}, Max uses: ${maxUses ?? 'unlimited'}, Expires: ${expiresAt ?? 'never'}`,
+    });
+
     res.status(201).json(invite);
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -232,6 +266,14 @@ router.delete('/invites/:id', async (req: AuthRequest, res: Response) => {
     }
 
     await prisma.inviteLink.delete({ where: { id } });
+
+    writeAuditLog({
+      action: 'invite.deleted',
+      actorId: req.user!.userId,
+      targetType: 'invite',
+      targetId: id,
+    });
+
     res.json({ message: 'Invite deleted' });
   } catch (error) {
     logError('Admin delete invite error', error);
@@ -257,7 +299,7 @@ router.get('/channels', async (_req: AuthRequest, res: Response) => {
   }
 });
 
-// DELETE /admin/channels/:id - Delete a channel
+// DELETE /admin/channels/:id - Delete a channel (permanent)
 router.delete('/channels/:id', async (req: AuthRequest, res: Response) => {
   try {
     const id = parseIntParam(req.params.id);
@@ -266,19 +308,199 @@ router.delete('/channels/:id', async (req: AuthRequest, res: Response) => {
       return;
     }
 
+    const channel = await prisma.channel.findUnique({ where: { id }, select: { name: true } });
+    if (!channel) {
+      res.status(404).json({ error: 'Channel not found' });
+      return;
+    }
+
     await prisma.channel.delete({ where: { id } });
 
     const io = getIO();
     if (io) {
       io.emit('channel:deleted', { channelId: id });
-      // Evict all sockets from the deleted channel room
       io.in(`channel:${id}`).socketsLeave(`channel:${id}`);
     }
+
+    writeAuditLog({
+      action: 'channel.deleted',
+      actorId: req.user!.userId,
+      targetType: 'channel',
+      targetId: id,
+      targetName: channel.name,
+    });
 
     res.json({ message: 'Channel deleted' });
   } catch (error) {
     logError('Admin delete channel error', error);
     res.status(500).json({ error: 'Failed to delete channel' });
+  }
+});
+
+// POST /admin/channels/:id/archive - Archive a channel (soft delete)
+router.post('/channels/:id/archive', async (req: AuthRequest, res: Response) => {
+  try {
+    const id = parseIntParam(req.params.id);
+    if (!id) {
+      res.status(400).json({ error: 'Invalid channel ID' });
+      return;
+    }
+
+    const channel = await prisma.channel.findUnique({ where: { id } });
+    if (!channel) {
+      res.status(404).json({ error: 'Channel not found' });
+      return;
+    }
+    if (channel.archivedAt) {
+      res.status(400).json({ error: 'Channel is already archived' });
+      return;
+    }
+
+    const updated = await prisma.channel.update({
+      where: { id },
+      data: { archivedAt: new Date() },
+      include: { _count: { select: { members: true, messages: true } } },
+    });
+
+    const io = getIO();
+    if (io) {
+      io.emit('channel:archived', { channelId: id, name: channel.name });
+    }
+
+    writeAuditLog({
+      action: 'channel.archived',
+      actorId: req.user!.userId,
+      targetType: 'channel',
+      targetId: id,
+      targetName: channel.name,
+    });
+
+    res.json(updated);
+  } catch (error) {
+    logError('Admin archive channel error', error);
+    res.status(500).json({ error: 'Failed to archive channel' });
+  }
+});
+
+// POST /admin/channels/:id/unarchive - Unarchive a channel
+router.post('/channels/:id/unarchive', async (req: AuthRequest, res: Response) => {
+  try {
+    const id = parseIntParam(req.params.id);
+    if (!id) {
+      res.status(400).json({ error: 'Invalid channel ID' });
+      return;
+    }
+
+    const channel = await prisma.channel.findUnique({ where: { id } });
+    if (!channel) {
+      res.status(404).json({ error: 'Channel not found' });
+      return;
+    }
+    if (!channel.archivedAt) {
+      res.status(400).json({ error: 'Channel is not archived' });
+      return;
+    }
+
+    const updated = await prisma.channel.update({
+      where: { id },
+      data: { archivedAt: null },
+      include: { _count: { select: { members: true, messages: true } } },
+    });
+
+    const io = getIO();
+    if (io) {
+      io.emit('channel:unarchived', { channelId: id, name: channel.name });
+    }
+
+    writeAuditLog({
+      action: 'channel.unarchived',
+      actorId: req.user!.userId,
+      targetType: 'channel',
+      targetId: id,
+      targetName: channel.name,
+    });
+
+    res.json(updated);
+  } catch (error) {
+    logError('Admin unarchive channel error', error);
+    res.status(500).json({ error: 'Failed to unarchive channel' });
+  }
+});
+
+// PATCH /admin/channels/:id - Edit channel name
+const editChannelSchema = z.object({
+  name: z.string().min(1).max(80)
+    .refine(val => val.trim().length > 0, { message: 'Name cannot be empty' })
+    .refine(val => /^[a-z0-9-]+$/.test(val), { message: 'Channel name must be lowercase alphanumeric with hyphens' })
+    .optional(),
+  isPrivate: z.boolean().optional(),
+}).refine(data => data.name !== undefined || data.isPrivate !== undefined, {
+  message: 'At least one field must be provided',
+});
+
+router.patch('/channels/:id', async (req: AuthRequest, res: Response) => {
+  try {
+    const id = parseIntParam(req.params.id);
+    if (!id) {
+      res.status(400).json({ error: 'Invalid channel ID' });
+      return;
+    }
+
+    const parsed = editChannelSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.issues[0]?.message || 'Invalid input' });
+      return;
+    }
+
+    const channel = await prisma.channel.findUnique({ where: { id } });
+    if (!channel) {
+      res.status(404).json({ error: 'Channel not found' });
+      return;
+    }
+
+    const updateData: { name?: string; isPrivate?: boolean } = {};
+    const changes: string[] = [];
+
+    if (parsed.data.name && parsed.data.name !== channel.name) {
+      // Check for name conflicts
+      const existing = await prisma.channel.findUnique({ where: { name: parsed.data.name } });
+      if (existing) {
+        res.status(400).json({ error: 'A channel with that name already exists' });
+        return;
+      }
+      updateData.name = parsed.data.name;
+      changes.push(`Renamed from #${channel.name} to #${parsed.data.name}`);
+    }
+
+    if (parsed.data.isPrivate !== undefined && parsed.data.isPrivate !== channel.isPrivate) {
+      updateData.isPrivate = parsed.data.isPrivate;
+      changes.push(`Changed to ${parsed.data.isPrivate ? 'private' : 'public'}`);
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      res.json(channel);
+      return;
+    }
+
+    const updated = await prisma.channel.update({
+      where: { id },
+      data: updateData,
+      include: { _count: { select: { members: true, messages: true } } },
+    });
+
+    writeAuditLog({
+      action: 'channel.edited',
+      actorId: req.user!.userId,
+      targetType: 'channel',
+      targetId: id,
+      targetName: updated.name,
+      details: changes.join('; '),
+    });
+
+    res.json(updated);
+  } catch (error) {
+    logError('Admin edit channel error', error);
+    res.status(500).json({ error: 'Failed to edit channel' });
   }
 });
 
@@ -356,6 +578,31 @@ router.delete('/channels/:id/members/:userId', async (req: AuthRequest, res: Res
   } catch (error) {
     logError('Admin remove channel member error', error);
     res.status(500).json({ error: 'Failed to remove member' });
+  }
+});
+
+// GET /admin/audit-log - List audit log entries
+router.get('/audit-log', async (req: AuthRequest, res: Response) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
+    const offset = parseInt(req.query.offset as string) || 0;
+
+    const [entries, total] = await Promise.all([
+      prisma.auditLog.findMany({
+        include: {
+          actor: { select: { id: true, name: true, avatar: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: offset,
+      }),
+      prisma.auditLog.count(),
+    ]);
+
+    res.json({ entries, total });
+  } catch (error) {
+    logError('Admin audit log error', error);
+    res.status(500).json({ error: 'Failed to get audit log' });
   }
 });
 

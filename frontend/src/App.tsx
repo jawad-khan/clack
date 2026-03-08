@@ -257,6 +257,18 @@ function AppShell() {
       }
     };
 
+    const handleChannelArchived = (data: { channelId: number }) => {
+      useChannelStore.getState().fetchChannels();
+      const { activeChannelId } = useChannelStore.getState();
+      if (activeChannelId === data.channelId) {
+        useChannelStore.setState({ activeChannelId: null });
+      }
+    };
+
+    const handleChannelUnarchived = () => {
+      useChannelStore.getState().fetchChannels();
+    };
+
     const handleReactionAdded = (data: { messageId: number; reaction: { emoji: string; userId: number; user: { name: string } } }) => {
       useMessageStore.getState().onReactionAdded(data);
     };
@@ -279,6 +291,8 @@ function AppShell() {
     socket.on('channel:member-left', handleMemberLeft);
     socket.on('channel:joined', handleChannelJoined);
     socket.on('channel:deleted', handleChannelDeleted);
+    socket.on('channel:archived', handleChannelArchived);
+    socket.on('channel:unarchived', handleChannelUnarchived);
     socket.on('reaction:added', handleReactionAdded);
     socket.on('reaction:removed', handleReactionRemoved);
 
@@ -302,6 +316,8 @@ function AppShell() {
       socket.off('channel:member-left', handleMemberLeft);
       socket.off('channel:joined', handleChannelJoined);
       socket.off('channel:deleted', handleChannelDeleted);
+      socket.off('channel:archived', handleChannelArchived);
+      socket.off('channel:unarchived', handleChannelUnarchived);
       socket.off('reaction:added', handleReactionAdded);
       socket.off('reaction:removed', handleReactionRemoved);
       socket.off('disconnect', handleDisconnect);

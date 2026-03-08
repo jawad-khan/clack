@@ -31,6 +31,16 @@ router.post('/:id/messages', authMiddleware, requireChannelMembership, async (re
     const userId = req.user!.userId;
     const { content, threadId, fileIds } = createMessageSchema.parse(req.body);
 
+    // Block messaging in archived channels
+    const channelRecord = await prisma.channel.findUnique({
+      where: { id: channelId },
+      select: { archivedAt: true },
+    });
+    if (channelRecord?.archivedAt) {
+      res.status(403).json({ error: 'This channel has been archived' });
+      return;
+    }
+
     // Validate threadId belongs to the same channel (prevent cross-channel thread injection)
     if (threadId) {
       const parentMessage = await prisma.message.findUnique({

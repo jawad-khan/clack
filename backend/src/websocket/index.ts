@@ -265,6 +265,16 @@ export function initializeWebSocket(httpServer: HttpServer) {
           return;
         }
 
+        // Block messaging in archived channels
+        const channel = await prisma.channel.findUnique({
+          where: { id: data.channelId },
+          select: { archivedAt: true },
+        });
+        if (channel?.archivedAt) {
+          socket.emit('error', { message: 'This channel has been archived' });
+          return;
+        }
+
         // Validate threadId belongs to the same channel
         if (data.threadId) {
           const parentMessage = await prisma.message.findUnique({

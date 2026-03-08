@@ -638,8 +638,21 @@ export interface AdminChannel {
   name: string;
   isPrivate: boolean;
   createdBy?: number | null;
+  archivedAt?: string | null;
   createdAt: string;
   _count: { members: number; messages: number };
+}
+
+export interface AuditLogEntry {
+  id: number;
+  action: string;
+  actorId: number;
+  targetType: string;
+  targetId?: number | null;
+  targetName?: string | null;
+  details?: string | null;
+  createdAt: string;
+  actor: { id: number; name: string; avatar?: string | null };
 }
 
 export interface AdminInvite {
@@ -679,6 +692,25 @@ export function adminGetChannels() {
 
 export function adminDeleteChannel(channelId: number) {
   return request<{ message: string }>(`/admin/channels/${channelId}`, { method: 'DELETE' });
+}
+
+export function adminArchiveChannel(channelId: number) {
+  return request<AdminChannel>(`/admin/channels/${channelId}/archive`, { method: 'POST' });
+}
+
+export function adminUnarchiveChannel(channelId: number) {
+  return request<AdminChannel>(`/admin/channels/${channelId}/unarchive`, { method: 'POST' });
+}
+
+export function adminEditChannel(channelId: number, data: { name?: string; isPrivate?: boolean }) {
+  return request<AdminChannel>(`/admin/channels/${channelId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export function adminGetAuditLog(limit = 50, offset = 0) {
+  return request<{ entries: AuditLogEntry[]; total: number }>(`/admin/audit-log?limit=${limit}&offset=${offset}`);
 }
 
 export function adminGetInvites() {

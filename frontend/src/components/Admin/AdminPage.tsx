@@ -1,18 +1,20 @@
 import { useState, useEffect } from 'react';
-import { Shield, Users, Link2, Hash, Menu } from 'lucide-react';
+import { Shield, Users, Link2, Hash, Menu, ScrollText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAdminStore } from '@/stores/useAdminStore';
 import { useMobileStore } from '@/stores/useMobileStore';
 import { AdminMembersTab } from './AdminMembersTab';
 import { AdminInvitesTab } from './AdminInvitesTab';
 import { AdminChannelsTab } from './AdminChannelsTab';
+import { AdminAuditLogTab } from './AdminAuditLogTab';
 
-type Tab = 'members' | 'invites' | 'channels';
+type Tab = 'members' | 'invites' | 'channels' | 'audit';
 
 const TABS: { id: Tab; label: string; icon: typeof Users }[] = [
   { id: 'members', label: 'Members', icon: Users },
   { id: 'invites', label: 'Invites', icon: Link2 },
   { id: 'channels', label: 'Channels', icon: Hash },
+  { id: 'audit', label: 'Audit Log', icon: ScrollText },
 ];
 
 export function AdminPage() {
@@ -63,6 +65,7 @@ export function AdminPage() {
         {activeTab === 'members' && <AdminMembersTab />}
         {activeTab === 'invites' && <AdminInvitesTab />}
         {activeTab === 'channels' && <AdminChannelsTab />}
+        {activeTab === 'audit' && <AdminAuditLogTab />}
       </div>
     </div>
   );

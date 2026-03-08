@@ -40,6 +40,7 @@ model User {
   bookmarks          Bookmark[]
   scheduledMessages  ScheduledMessage[]
   inviteLinks        InviteLink[]
+  auditLogs          AuditLog[]
 }
 
 model InviteLink {
@@ -55,16 +56,33 @@ model InviteLink {
 }
 
 model Channel {
-  id        Int      @id @default(autoincrement())
-  name      String   @unique @db.VarChar(80)
-  isPrivate Boolean  @default(false)
-  createdBy Int?
-  createdAt DateTime @default(now())
+  id         Int       @id @default(autoincrement())
+  name       String    @unique @db.VarChar(80)
+  isPrivate  Boolean   @default(false)
+  createdBy  Int?
+  archivedAt DateTime?
+  createdAt  DateTime  @default(now())
 
   messages           Message[]
   members            ChannelMember[]
   reads              ChannelRead[]
   scheduledMessages  ScheduledMessage[]
+}
+
+model AuditLog {
+  id         Int      @id @default(autoincrement())
+  action     String   @db.VarChar(100)
+  actorId    Int
+  targetType String   @db.VarChar(50)
+  targetId   Int?
+  targetName String?  @db.VarChar(200)
+  details    String?
+  createdAt  DateTime @default(now())
+
+  actor User @relation(fields: [actorId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
+  @@index([actorId])
 }
 
 model ChannelMember {

@@ -82,8 +82,9 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
 
     const channels = await prisma.channel.findMany({
       where: isGuest
-        ? { members: { some: { userId } } }
+        ? { members: { some: { userId } }, archivedAt: null }
         : {
+            archivedAt: null,
             OR: [
               { isPrivate: false },
               { members: { some: { userId } } },

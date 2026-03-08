@@ -22,6 +22,7 @@ describe('Admin API', () => {
 
   beforeEach(async () => {
     await prisma.inviteLink.deleteMany();
+    await prisma.auditLog.deleteMany();
     await prisma.bookmark.deleteMany();
     await prisma.scheduledMessage.deleteMany();
     await prisma.reaction.deleteMany();

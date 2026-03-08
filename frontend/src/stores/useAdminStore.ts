@@ -1,28 +1,36 @@
 import { create } from 'zustand';
 import * as api from '@/lib/api';
-import type { AdminUser, AdminChannel, AdminInvite } from '@/lib/api';
+import type { AdminUser, AdminChannel, AdminInvite, AuditLogEntry } from '@/lib/api';
 
 interface AdminState {
   users: AdminUser[];
   channels: AdminChannel[];
   invites: AdminInvite[];
+  auditLog: AuditLogEntry[];
+  auditLogTotal: number;
   isLoading: boolean;
   error: string | null;
   fetchUsers: () => Promise<void>;
   fetchChannels: () => Promise<void>;
   fetchInvites: () => Promise<void>;
+  fetchAuditLog: (limit?: number, offset?: number) => Promise<void>;
   updateUserRole: (userId: number, role: 'ADMIN' | 'MEMBER' | 'GUEST') => Promise<void>;
   deactivateUser: (userId: number) => Promise<void>;
   reactivateUser: (userId: number) => Promise<void>;
   createInvite: (data: { role?: string; maxUses?: number | null; expiresAt?: string | null }) => Promise<void>;
   deleteInvite: (inviteId: number) => Promise<void>;
   deleteChannel: (channelId: number) => Promise<void>;
+  archiveChannel: (channelId: number) => Promise<void>;
+  unarchiveChannel: (channelId: number) => Promise<void>;
+  editChannel: (channelId: number, data: { name?: string; isPrivate?: boolean }) => Promise<void>;
 }
 
 export const useAdminStore = create<AdminState>((set, get) => ({
   users: [],
   channels: [],
   invites: [],
+  auditLog: [],
+  auditLogTotal: 0,
   isLoading: false,
   error: null,
 
@@ -112,6 +120,58 @@ export const useAdminStore = create<AdminState>((set, get) => ({
       await api.adminDeleteChannel(channelId);
     } catch (err) {
       set({ channels: prev, error: err instanceof Error ? err.message : 'Failed to delete channel' });
+    }
+  },
+
+  archiveChannel: async (channelId) => {
+    const prev = get().channels;
+    set({
+      channels: prev.map((c) =>
+        c.id === channelId ? { ...c, archivedAt: new Date().toISOString() } : c
+      ),
+    });
+    try {
+      const updated = await api.adminArchiveChannel(channelId);
+      set({ channels: get().channels.map((c) => (c.id === channelId ? updated : c)) });
+    } catch (err) {
+      set({ channels: prev, error: err instanceof Error ? err.message : 'Failed to archive channel' });
+    }
+  },
+
+  unarchiveChannel: async (channelId) => {
+    const prev = get().channels;
+    set({
+      channels: prev.map((c) =>
+        c.id === channelId ? { ...c, archivedAt: null } : c
+      ),
+    });
+    try {
+      const updated = await api.adminUnarchiveChannel(channelId);
+      set({ channels: get().channels.map((c) => (c.id === channelId ? updated : c)) });
+    } catch (err) {
+      set({ channels: prev, error: err instanceof Error ? err.message : 'Failed to unarchive channel' });
+    }
+  },
+
+  editChannel: async (channelId, data) => {
+    const prev = get().channels;
+    try {
+      const updated = await api.adminEditChannel(channelId, data);
+      set({ channels: get().channels.map((c) => (c.id === channelId ? updated : c)) });
+    } catch (err) {
+      set({ channels: prev, error: err instanceof Error ? err.message : 'Failed to edit channel' });
+    }
+  },
+
+  fetchAuditLog: async (limit = 50, offset = 0) => {
+    try {
+      const data = await api.adminGetAuditLog(limit, offset);
+      set({
+        auditLog: offset > 0 ? [...get().auditLog, ...data.entries] : data.entries,
+        auditLogTotal: data.total,
+      });
+    } catch (err) {
+      set({ error: err instanceof Error ? err.message : 'Failed to fetch audit log' });
     }
   },
 }));
