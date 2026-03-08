@@ -1,10 +1,10 @@
-import { Mic, MicOff, Video, VideoOff, PhoneOff, Headphones } from 'lucide-react';
+import { Mic, MicOff, PhoneOff, Headphones } from 'lucide-react';
 import { useHuddleStore } from '@/stores/useHuddleStore';
 import { useChannelStore } from '@/stores/useChannelStore';
 import { Avatar } from '@/components/ui/avatar';
 
 export function HuddleBar() {
-  const { currentChannelId, isMuted, isVideoOn, activeHuddles, leaveHuddle, toggleMute, toggleVideo, error } = useHuddleStore();
+  const { currentChannelId, isMuted, activeHuddles, leaveHuddle, toggleMute, error } = useHuddleStore();
   const channels = useChannelStore((s) => s.channels);
   const directMessages = useChannelStore((s) => s.directMessages);
 
@@ -56,19 +56,6 @@ export function HuddleBar() {
               </span>
             )}
           </div>
-
-          {/* Video toggle */}
-          <button
-            onClick={toggleVideo}
-            className={`flex h-7 w-7 items-center justify-center rounded-full transition-colors ${
-              isVideoOn
-                ? 'bg-green-200 text-green-700 hover:bg-green-300'
-                : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
-            }`}
-            title={isVideoOn ? 'Turn off camera' : 'Turn on camera'}
-          >
-            {isVideoOn ? <Video className="h-3.5 w-3.5" /> : <VideoOff className="h-3.5 w-3.5" />}
-          </button>
 
           {/* Mute toggle */}
           <button

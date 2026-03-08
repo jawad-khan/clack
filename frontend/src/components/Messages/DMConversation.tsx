@@ -28,6 +28,7 @@ import { HeaderNotifications } from './HeaderNotifications';
 import { HeaderTabs } from './HeaderTabs';
 import { PanelHeader } from './PanelHeader';
 import { HuddleButton } from '@/components/Huddle/HuddleButton';
+import { HuddleInvite } from '@/components/Huddle/HuddleInvite';
 import { renderMessageContent } from '@/lib/renderMessageContent';
 import { useMobileStore } from '@/stores/useMobileStore';
 import type { DMMessage } from '@/stores/useDMStore';
@@ -321,12 +322,16 @@ export function DMConversation({ userId, userName, userAvatar }: DMConversationP
                               </div>
                             </div>
                           ) : (
+                            {msg.content === 'Started a huddle. Join to talk!' ? (
+                              <HuddleInvite channelId={-userId} fromUserId={msg.fromUserId} />
+                            ) : (
                             <div className="whitespace-pre-wrap break-words text-[15px] leading-[22px] text-slack-primary">
                               {renderMessageContent(msg.content)}
                               {!showAvatar && msg.editedAt && (
                                 <span className="ml-1 text-[12px] text-slack-secondary">(edited)</span>
                               )}
                             </div>
+                            )}
                           )}
                           {msg.reactions.length > 0 && (
                             <MessageReactions

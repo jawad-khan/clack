@@ -39,7 +39,6 @@ const RATE_LIMITS: Record<string, { max: number; windowMs: number }> = {
   'huddle:join': { max: 10, windowMs: 60_000 },
   'huddle:leave': { max: 10, windowMs: 60_000 },
   'huddle:mute': { max: 30, windowMs: 60_000 },
-  'huddle:video': { max: 30, windowMs: 60_000 },
   'huddle:signal': { max: 200, windowMs: 60_000 },
 };
 

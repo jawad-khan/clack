@@ -267,31 +267,6 @@ export function registerHuddleHandlers(
     });
   });
 
-  // Toggle video
-  sock.on('huddle:video', (rawData: unknown) => {
-    if (!socket.user) return;
-    if (!checkRateLimit(socket.user.userId, 'huddle:mute')) return;
-
-    const parsed = wsHuddleMuteSchema.safeParse(rawData);
-    if (!parsed.success) return;
-
-    const channelId = (rawData as { channelId: number }).channelId;
-    const isVideoOn = (rawData as { isVideoOn: boolean }).isVideoOn;
-    if (typeof channelId !== 'number' || typeof isVideoOn !== 'boolean') return;
-
-    const huddle = activeHuddles.get(channelId);
-    if (!huddle) return;
-
-    const participant = huddle.participants.get(socket.user.userId);
-    if (!participant) return;
-
-    io.to(`huddle:${channelId}`).emit('huddle:video-changed', {
-      channelId,
-      userId: socket.user.userId,
-      isVideoOn,
-    });
-  });
-
   // Forward WebRTC signaling
   sock.on('huddle:signal', (rawData: unknown) => {
     if (!socket.user) return;

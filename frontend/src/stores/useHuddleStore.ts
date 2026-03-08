@@ -6,14 +6,12 @@ export interface HuddleParticipant {
   name: string;
   avatar: string | null;
   isMuted: boolean;
-  isVideoOn?: boolean;
   joinedAt: string;
 }
 
 interface PeerState {
   pc: RTCPeerConnection;
   audioElement: HTMLAudioElement | null;
-  videoStream: MediaStream | null;
 }
 
 const ICE_SERVERS: RTCIceServer[] = [
@@ -28,7 +26,6 @@ interface HuddleState {
   // Current user's active huddle
   currentChannelId: number | null;
   isMuted: boolean;
-  isVideoOn: boolean;
   isJoining: boolean;
   localStream: MediaStream | null;
   peers: Map<number, PeerState>;
@@ -38,7 +35,6 @@ interface HuddleState {
   joinHuddle: (channelId: number) => Promise<void>;
   leaveHuddle: () => void;
   toggleMute: () => void;
-  toggleVideo: () => void;
 
   // Socket event handlers
   onHuddleState: (data: { channelId: number; participants: HuddleParticipant[] }) => void;
@@ -46,7 +42,6 @@ interface HuddleState {
   onParticipantJoined: (data: { channelId: number; participant: HuddleParticipant }) => void;
   onParticipantLeft: (data: { channelId: number; userId: number }) => void;
   onMuteChanged: (data: { channelId: number; userId: number; isMuted: boolean }) => void;
-  onVideoChanged: (data: { channelId: number; userId: number; isVideoOn: boolean }) => void;
   onSignal: (data: { channelId: number; fromUserId: number; signal: { type: string; sdp?: string; candidate?: unknown } }) => void;
   onHuddleEnded: (data: { channelId: number }) => void;
   cleanup: () => void;
@@ -57,7 +52,6 @@ export const useHuddleStore = create<HuddleState>((set, get) => ({
   activeHuddles: {},
   currentChannelId: null,
   isMuted: false,
-  isVideoOn: false,
   isJoining: false,
   localStream: null,
   peers: new Map(),
@@ -82,7 +76,7 @@ export const useHuddleStore = create<HuddleState>((set, get) => ({
       // Start with audio only — camera is requested on-demand when user clicks video button
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-      set({ localStream: stream, currentChannelId: channelId, isJoining: false, isMuted: false, isVideoOn: false });
+      set({ localStream: stream, currentChannelId: channelId, isJoining: false, isMuted: false });
 
       const socket = getSocket();
       if (socket) {
@@ -119,49 +113,6 @@ export const useHuddleStore = create<HuddleState>((set, get) => ({
     const socket = getSocket();
     if (socket) {
       socket.emit('huddle:mute', { channelId: currentChannelId, isMuted: newMuted });
-    }
-  },
-
-  toggleVideo: async () => {
-    const { isVideoOn, localStream, currentChannelId } = get();
-    if (!localStream || !currentChannelId) return;
-
-    if (!isVideoOn) {
-      // Turning video ON — check if we already have a video track
-      const existingVideoTracks = localStream.getVideoTracks();
-      if (existingVideoTracks.length > 0) {
-        existingVideoTracks.forEach((t) => { t.enabled = true; });
-      } else {
-        // Request camera on-demand
-        try {
-          const videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
-          const videoTrack = videoStream.getVideoTracks()[0];
-          localStream.addTrack(videoTrack);
-
-          // Add video track to existing peer connections
-          const { peers } = get();
-          for (const [, peer] of peers) {
-            peer.pc.addTrack(videoTrack, localStream);
-          }
-        } catch {
-          set({ error: 'Camera access denied' });
-          return;
-        }
-      }
-
-      set({ isVideoOn: true });
-      const socket = getSocket();
-      if (socket) {
-        socket.emit('huddle:video', { channelId: currentChannelId, isVideoOn: true });
-      }
-    } else {
-      // Turning video OFF
-      localStream.getVideoTracks().forEach((t) => { t.enabled = false; });
-      set({ isVideoOn: false });
-      const socket = getSocket();
-      if (socket) {
-        socket.emit('huddle:video', { channelId: currentChannelId, isVideoOn: false });
-      }
     }
   },
 
@@ -234,20 +185,6 @@ export const useHuddleStore = create<HuddleState>((set, get) => ({
           ...s.activeHuddles,
           [data.channelId]: existing.map((p) =>
             p.userId === data.userId ? { ...p, isMuted: data.isMuted } : p
-          ),
-        },
-      };
-    });
-  },
-
-  onVideoChanged: (data) => {
-    set((s) => {
-      const existing = s.activeHuddles[data.channelId] || [];
-      return {
-        activeHuddles: {
-          ...s.activeHuddles,
-          [data.channelId]: existing.map((p) =>
-            p.userId === data.userId ? { ...p, isVideoOn: data.isVideoOn } : p
           ),
         },
       };
@@ -334,7 +271,6 @@ export const useHuddleStore = create<HuddleState>((set, get) => ({
     set({
       currentChannelId: null,
       isMuted: false,
-      isVideoOn: false,
       localStream: null,
       peers: new Map(),
       error: null,
@@ -349,8 +285,8 @@ function createPeerConnection(remoteUserId: number, isInitiator: boolean): RTCPe
 
   const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
 
-  // Add all local tracks (audio + video)
-  localStream.getTracks().forEach((track) => {
+  // Add audio track
+  localStream.getAudioTracks().forEach((track) => {
     pc.addTrack(track, localStream);
   });
 
@@ -369,32 +305,22 @@ function createPeerConnection(remoteUserId: number, isInitiator: boolean): RTCPe
 
   pc.ontrack = (event) => {
     const stream = event.streams[0];
-    const track = event.track;
 
-    if (track.kind === 'audio') {
-      const audio = document.createElement('audio');
-      audio.srcObject = stream;
-      audio.autoplay = true;
-      audio.play().catch(() => {});
+    const audio = document.createElement('audio');
+    audio.srcObject = stream;
+    audio.autoplay = true;
+    audio.play().catch(() => {});
 
-      const currentPeers = new Map(useHuddleStore.getState().peers);
-      const existing = currentPeers.get(remoteUserId);
-      if (existing) {
-        existing.audioElement = audio;
-      }
-      useHuddleStore.setState({ peers: currentPeers });
-    } else if (track.kind === 'video') {
-      const currentPeers = new Map(useHuddleStore.getState().peers);
-      const existing = currentPeers.get(remoteUserId);
-      if (existing) {
-        existing.videoStream = stream;
-      }
-      useHuddleStore.setState({ peers: currentPeers });
+    const currentPeers = new Map(useHuddleStore.getState().peers);
+    const existing = currentPeers.get(remoteUserId);
+    if (existing) {
+      existing.audioElement = audio;
     }
+    useHuddleStore.setState({ peers: currentPeers });
   };
 
   const newPeers = new Map(peers);
-  newPeers.set(remoteUserId, { pc, audioElement: null, videoStream: null });
+  newPeers.set(remoteUserId, { pc, audioElement: null });
   useHuddleStore.setState({ peers: newPeers });
 
   if (isInitiator) {
