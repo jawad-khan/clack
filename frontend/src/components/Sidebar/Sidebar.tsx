@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
-  MessageSquare,
   FileText,
   Bookmark,
   ChevronDown,
@@ -30,8 +29,7 @@ import { useMobileStore } from '@/stores/useMobileStore';
 import { HuddleBar } from '@/components/Huddle/HuddleBar';
 
 const navItems = [
-  { icon: MessageSquare, label: 'DMs', id: 'dms' },
-  { icon: Bookmark, label: 'Saved', id: 'later' },
+  { icon: Bookmark, label: 'Later', id: 'later' },
   { icon: FileText, label: 'Files', id: 'files' },
 ];
 
