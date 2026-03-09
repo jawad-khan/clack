@@ -3,12 +3,15 @@ import { FileText, Download, Menu } from 'lucide-react';
 import { format } from 'date-fns';
 import { getUserFiles, getAuthFileUrl, getFileUrl, refreshDownloadToken, type ApiFileWithUser } from '@/lib/api';
 import { formatBytes, FileIcon } from '@/lib/fileUtils';
+import { ImageLightbox } from './ImageLightbox';
 import { useMobileStore } from '@/stores/useMobileStore';
 
 export function FilesPage() {
   const [files, setFiles] = useState<ApiFileWithUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+  const [lightboxAlt, setLightboxAlt] = useState('');
 
   const fetchFiles = useCallback(() => {
     setIsLoading(true);
@@ -52,27 +55,39 @@ export function FilesPage() {
             {files.map((file) => (
               <div key={file.id} className="flex items-start gap-3 rounded-lg p-3 hover:bg-slack-hover">
                 {file.mimetype.startsWith('image/') ? (
-                  <a href={getFileUrl(file.id)} target="_blank" rel="noopener noreferrer" className="flex-shrink-0">
+                  <button
+                    onClick={() => { setLightboxSrc(getFileUrl(file.id)); setLightboxAlt(file.originalName); }}
+                    className="flex-shrink-0 cursor-zoom-in"
+                  >
                     <img
                       src={getFileUrl(file.id)}
                       alt={file.originalName}
                       className="h-10 w-10 rounded object-cover"
                     />
-                  </a>
+                  </button>
                 ) : (
                   <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded bg-slack-hover">
                     <FileIcon mimetype={file.mimetype} />
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
-                  <a
-                    href={getFileUrl(file.id)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block text-[14px] font-medium text-slack-link hover:underline truncate"
-                  >
-                    {file.originalName}
-                  </a>
+                  {file.mimetype.startsWith('image/') ? (
+                    <button
+                      onClick={() => { setLightboxSrc(getFileUrl(file.id)); setLightboxAlt(file.originalName); }}
+                      className="block text-[14px] font-medium text-slack-link hover:underline truncate text-left"
+                    >
+                      {file.originalName}
+                    </button>
+                  ) : (
+                    <a
+                      href={getFileUrl(file.id)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block text-[14px] font-medium text-slack-link hover:underline truncate"
+                    >
+                      {file.originalName}
+                    </a>
+                  )}
                   <p className="text-[12px] text-slack-secondary">
                     {formatBytes(file.size)} &middot; {file.user.name} &middot;{' '}
                     {format(new Date(file.createdAt), 'MMM d, yyyy')}
@@ -91,6 +106,14 @@ export function FilesPage() {
           </div>
         )}
       </div>
+
+      {lightboxSrc && (
+        <ImageLightbox
+          src={lightboxSrc}
+          alt={lightboxAlt}
+          onClose={() => setLightboxSrc(null)}
+        />
+      )}
     </div>
   );
 }
