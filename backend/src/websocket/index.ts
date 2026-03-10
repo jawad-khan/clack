@@ -113,7 +113,7 @@ export function initializeWebSocket(httpServer: HttpServer) {
   ioInstance = io;
 
   // Authentication middleware
-  io.use((socket: AuthenticatedSocket, next) => {
+  io.use(async (socket: AuthenticatedSocket, next) => {
     const token = socket.handshake.auth.token;
 
     if (!token) {
@@ -121,11 +121,24 @@ export function initializeWebSocket(httpServer: HttpServer) {
     }
 
     try {
-      const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as JwtPayload & { purpose?: string };
+      const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as JwtPayload & { purpose?: string; tokenVersion?: number };
       // Reject scoped tokens (e.g. file-download) from being used as WS auth
       if (decoded.purpose) {
         return next(new Error('Invalid token'));
       }
+
+      // Verify tokenVersion against DB to reject revoked/outdated tokens
+      const user = await prisma.user.findUnique({
+        where: { id: decoded.userId },
+        select: { tokenVersion: true, deactivatedAt: true },
+      });
+      if (!user || user.deactivatedAt) {
+        return next(new Error('Invalid token'));
+      }
+      if (decoded.tokenVersion !== undefined && user.tokenVersion !== decoded.tokenVersion) {
+        return next(new Error('Invalid token'));
+      }
+
       socket.user = decoded;
       next();
     } catch (error) {
