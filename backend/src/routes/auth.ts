@@ -92,7 +92,8 @@ router.post('/register', async (req: Request, res: Response) => {
             (invite.maxUses !== null && invite.useCount >= invite.maxUses)) {
           throw new Error('INVITE_INVALID');
         }
-        assignedRole = invite.role;
+        // Cap self-service registration to MEMBER/GUEST — OWNER/ADMIN require admin action
+        assignedRole = (invite.role === 'MEMBER' || invite.role === 'GUEST') ? invite.role : 'MEMBER';
         await tx.inviteLink.update({
           where: { id: invite.id },
           data: { useCount: { increment: 1 } },
