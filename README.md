@@ -14,6 +14,10 @@
   <b>Vision:</b> minimalist · familiar · fast · safe · open-source
 </p>
 
+## [Day 14](https://www.linkedin.com/posts/nathancavaglione_day-1414-slack-took-7-years-and-340m-to-activity-7437875121870163969-Hxur?utm_source=share&utm_medium=member_desktop&rcm=ACoAABo_DiMBthZ8gqvy6PiOdSHUMuPt9XgMnfY)
+
+<img src="images/day_14.gif" alt="Day 14" width="800">
+
 ## [Day 13](https://www.linkedin.com/posts/nathancavaglione_day-1314-cloning-slack-with-claude-code-activity-7437474978582716417-23R_?utm_source=share&utm_medium=member_desktop&rcm=ACoAABo_DiMBthZ8gqvy6PiOdSHUMuPt9XgMnfY)
 
 <img src="images/day_13.png" alt="Day 13" width="800">
