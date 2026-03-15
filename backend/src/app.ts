@@ -40,6 +40,7 @@ app.use(helmet({
       'media-src': ["'self'", 'blob:', 'https://storage.googleapis.com'],
     },
   },
+  crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
   crossOriginEmbedderPolicy: 'credentialless' as any,
   hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
 }));
