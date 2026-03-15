@@ -17,31 +17,27 @@ steps:
   - name: 'gcr.io/cloud-builders/docker'
     args: ['push', '--all-tags', '${_IMAGE}']
 
-  # Deploy to Cloud Run (CORS_ORIGIN uses ; as separator to avoid gcloud substitution parsing issues)
+  # Deploy to Cloud Run
+  # CORS_ORIGIN uses ; as separator in substitutions to avoid gcloud comma parsing.
+  # --set-env-vars uses | as delimiter instead of default comma.
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: 'bash'
     args:
       - '-c'
       - |
-        CORS_ORIGIN=$$(echo "${_CORS_ORIGIN}" | tr ';' ',')
+        CORS=$$(echo "${_CORS_ORIGIN}" | tr ';' ',')
         gcloud run deploy ${_SERVICE} \
           --image=${_IMAGE}:${BUILD_ID} \
           --region=${_REGION} \
           --add-cloudsql-instances=${_CLOUD_SQL} \
-          --set-env-vars=DATABASE_URL=${_DATABASE_URL} \
-          --set-env-vars=JWT_SECRET=${_JWT_SECRET} \
-          --set-env-vars=GCS_BUCKET_NAME=${_GCS_BUCKET} \
-          --set-env-vars=NODE_ENV=production \
-          --set-env-vars=RUN_SEED=${_RUN_SEED} \
-          --set-env-vars=GOOGLE_CLIENT_ID=${_GOOGLE_CLIENT_ID} \
-          --set-env-vars="CORS_ORIGIN=$$CORS_ORIGIN"
-      - '--timeout=3600'
-      - '--session-affinity'
-      - '--min-instances=1'
-      - '--max-instances=3'
-      - '--memory=512Mi'
-      - '--cpu=1'
-      - '--allow-unauthenticated'
+          --set-env-vars="^|^DATABASE_URL=${_DATABASE_URL}|JWT_SECRET=${_JWT_SECRET}|GCS_BUCKET_NAME=${_GCS_BUCKET}|NODE_ENV=production|RUN_SEED=${_RUN_SEED}|GOOGLE_CLIENT_ID=${_GOOGLE_CLIENT_ID}|CORS_ORIGIN=$$CORS" \
+          --timeout=3600 \
+          --session-affinity \
+          --min-instances=1 \
+          --max-instances=3 \
+          --memory=512Mi \
+          --cpu=1 \
+          --allow-unauthenticated
 
   # Ensure traffic routes to the new revision
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
