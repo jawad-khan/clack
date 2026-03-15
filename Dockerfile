@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=us-central1-docker.pkg.dev/ncvgl-gcp/cloud-run-source-deploy/slawk-base:latest
+ARG BASE_IMAGE=us-central1-docker.pkg.dev/clack-chat/cloud-run-source-deploy/clack-base:latest
 
 # ── Stage 1: Build frontend (deps from base) ────────────────────────
 FROM ${BASE_IMAGE} AS frontend-build

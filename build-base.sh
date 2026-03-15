@@ -3,9 +3,9 @@ set -euo pipefail
 
 # Rebuild the base image (only needed when package.json or prisma schema changes)
 
-GCP_PROJECT_ID="${GCP_PROJECT_ID:-ncvgl-gcp}"
-IMAGE="us-central1-docker.pkg.dev/${GCP_PROJECT_ID}/cloud-run-source-deploy/slawk-base"
-REPO_URL="https://github.com/ncvgl/slawk.git"
+GCP_PROJECT_ID="${GCP_PROJECT_ID:-clack-chat}"
+IMAGE="us-central1-docker.pkg.dev/${GCP_PROJECT_ID}/cloud-run-source-deploy/clack-base"
+REPO_URL="https://github.com/ybashir/clack.git"
 
 echo "Building base image..."
 echo "  Image: ${IMAGE}:latest"

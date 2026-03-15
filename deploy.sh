@@ -4,24 +4,24 @@ set -euo pipefail
 # ── Configuration ────────────────────────────────────────────────────
 # Set these environment variables before running, or export them in your shell.
 # To look up current production values:
-#   gcloud run services describe slawk --project ncvgl-gcp --region us-central1 \
+#   gcloud run services describe clack --project ncvgl-gcp --region us-central1 \
 #     --format='yaml(spec.template.spec.containers[0].env)'
 #
 # Required env vars:
 #   GCP_PROJECT_ID   - GCP project ID (default: ncvgl-gcp)
 #   DATABASE_URL     - Cloud SQL connection string (get from Cloud Run)
 #   JWT_SECRET       - JWT signing secret (get from Cloud Run)
-#   GCS_BUCKET_NAME  - GCS bucket for file uploads (default: slawk-uploads-<project>)
+#   GCS_BUCKET_NAME  - GCS bucket for file uploads (default: clack-uploads-<project>)
 #   RUN_SEED         - "true" for first deploy, "false" after
 
-GCP_PROJECT_ID="${GCP_PROJECT_ID:-ncvgl-gcp}"
+GCP_PROJECT_ID="${GCP_PROJECT_ID:-clack-chat}"
 REGION="${REGION:-us-central1}"
-SERVICE_NAME="${SERVICE_NAME:-slawk}"
-CLOUD_SQL_INSTANCE="${CLOUD_SQL_INSTANCE:-${GCP_PROJECT_ID}:${REGION}:slawk-db}"
+SERVICE_NAME="${SERVICE_NAME:-clack}"
+CLOUD_SQL_INSTANCE="${CLOUD_SQL_INSTANCE:-${GCP_PROJECT_ID}:${REGION}:clack-db}"
 
 DATABASE_URL="${DATABASE_URL:?Set DATABASE_URL}"
 JWT_SECRET="${JWT_SECRET:?Set JWT_SECRET}"
-GCS_BUCKET_NAME="${GCS_BUCKET_NAME:-slawk-uploads-${GCP_PROJECT_ID}}"
+GCS_BUCKET_NAME="${GCS_BUCKET_NAME:-clack-uploads-${GCP_PROJECT_ID}}"
 RUN_SEED="${RUN_SEED:-false}"
 
 echo "Deploying ${SERVICE_NAME} to Cloud Run..."
@@ -64,14 +64,14 @@ echo "  GCS bucket ready."
 echo ""
 
 # ── Clone main branch from GitHub ────────────────────────────────────
-REPO_URL="https://github.com/ncvgl/slawk.git"
+REPO_URL="https://github.com/ybashir/clack.git"
 DEPLOY_DIR=$(mktemp -d)
 echo "Cloning ${REPO_URL} (main) into ${DEPLOY_DIR}..."
 git clone --depth 1 --branch main "${REPO_URL}" "${DEPLOY_DIR}"
 echo ""
 
 # ── Build and deploy (with Docker layer caching) ────────────────────
-IMAGE="us-central1-docker.pkg.dev/${GCP_PROJECT_ID}/cloud-run-source-deploy/slawk"
+IMAGE="us-central1-docker.pkg.dev/${GCP_PROJECT_ID}/cloud-run-source-deploy/clack"
 
 gcloud builds submit "${DEPLOY_DIR}" \
   --config="${DEPLOY_DIR}/cloudbuild.yaml" \
