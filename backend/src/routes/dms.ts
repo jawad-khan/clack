@@ -67,13 +67,11 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
       });
     });
 
-    // Broadcast to both users so the DM appears in real-time
+    // Broadcast to the recipient so the DM appears in real-time
+    // (the sender already gets the message from the REST response)
     const io = getIO();
-    if (io && dm) {
-      io.to(`user:${fromUserId}`).emit('dm:new', dm);
-      if (fromUserId !== toUserId) {
-        io.to(`user:${toUserId}`).emit('dm:new', dm);
-      }
+    if (io && dm && fromUserId !== toUserId) {
+      io.to(`user:${toUserId}`).emit('dm:new', dm);
     }
 
     res.status(201).json(dm);
