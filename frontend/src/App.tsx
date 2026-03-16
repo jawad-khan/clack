@@ -401,24 +401,26 @@ function AppShell() {
     };
   }, []);
 
-  // Join channel rooms as they become available
+  // Join channel rooms as they become available (batch join = single DB query)
   useEffect(() => {
     const socket = getSocket();
     if (!socket) return;
 
     const joinChannels = () => {
-      const memberChannels = channels.filter(ch => ch.isMember && !joinedChannelsRef.current.has(ch.id));
-      console.log('[AppShell] Joining channels:', memberChannels.length, 'already joined:', joinedChannelsRef.current.size, 'socket connected:', socket.connected);
-      for (const ch of memberChannels) {
-        socket.emit('join:channel', ch.id);
-        joinedChannelsRef.current.add(ch.id);
-      }
+      const newChannels = channels.filter(ch => ch.isMember && !joinedChannelsRef.current.has(ch.id));
+      if (newChannels.length === 0) return;
+
+      console.log('[AppShell] Batch joining channels:', newChannels.length, 'already joined:', joinedChannelsRef.current.size);
+      const ids = newChannels.map(ch => ch.id);
+      socket.emit('join:channels', ids, (joined: number[]) => {
+        console.log('[AppShell] Server confirmed joined:', joined?.length ?? 0);
+        if (joined) joined.forEach(id => joinedChannelsRef.current.add(id));
+      });
     };
 
     if (socket.connected) {
       joinChannels();
     }
-    // Also join when socket reconnects
     socket.on('connect', joinChannels);
     return () => {
       socket.off('connect', joinChannels);

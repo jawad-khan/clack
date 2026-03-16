@@ -239,6 +239,37 @@ export function initializeWebSocket(httpServer: HttpServer) {
     }
 
     // Join channel room
+    // Batch join: single DB query for all channels at once
+    socket.on('join:channels', async (rawChannelIds: unknown, ack?: (joined: number[]) => void) => {
+      if (!socket.user) return;
+      if (!Array.isArray(rawChannelIds)) return;
+
+      const channelIds = rawChannelIds.filter((id): id is number => typeof id === 'number' && Number.isInteger(id) && id > 0).slice(0, 500);
+      if (channelIds.length === 0) return;
+
+      try {
+        // Single query to check membership for all channels
+        const memberships = await prisma.channelMember.findMany({
+          where: { userId: socket.user.userId, channelId: { in: channelIds } },
+          select: { channelId: true },
+        });
+        const memberSet = new Set(memberships.map(m => m.channelId));
+        const joined: number[] = [];
+        for (const id of channelIds) {
+          if (memberSet.has(id)) {
+            socket.join(`channel:${id}`);
+            joined.push(id);
+          }
+        }
+        console.log(`User ${socket.user.userId} batch joined ${joined.length} channels`);
+        if (typeof ack === 'function') ack(joined);
+      } catch (err) {
+        logError('Batch join error', err);
+        if (typeof ack === 'function') ack([]);
+      }
+    });
+
+    // Single channel join (kept for backwards compatibility)
     socket.on('join:channel', async (rawChannelId: unknown, ack?: (ok: boolean) => void) => {
       if (!socket.user) return;
       if (!checkRateLimit(socket.user.userId, 'join:channel')) {
